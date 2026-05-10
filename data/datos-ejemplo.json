@@ -1,0 +1,166 @@
+{
+  "conglomerados": [
+    {
+      "codigo": 101,
+      "latitud": 4.5981,
+      "longitud": -74.0758,
+      "departamento": "Cundinamarca",
+      "municipio": "Bogotá",
+      "region": "Andina",
+      "estado": "COMPLETADO",
+      "fecha_asignacion": "2024-01-10"
+    },
+    {
+      "codigo": 102,
+      "latitud": 6.2476,
+      "longitud": -75.5658,
+      "departamento": "Antioquia",
+      "municipio": "Medellín",
+      "region": "Andina",
+      "estado": "EN_PROGRESO",
+      "fecha_asignacion": "2024-01-15"
+    },
+    {
+      "codigo": 201,
+      "latitud": 9.3047,
+      "longitud": -75.3978,
+      "departamento": "Córdoba",
+      "municipio": "Montería",
+      "region": "Caribe",
+      "estado": "COMPLETADO",
+      "fecha_asignacion": "2024-02-01"
+    },
+    {
+      "codigo": 301,
+      "latitud": 5.0358,
+      "longitud": -77.0289,
+      "departamento": "Chocó",
+      "municipio": "Quibdó",
+      "region": "Pacífico",
+      "estado": "PENDIENTE",
+      "fecha_asignacion": "2024-02-10"
+    },
+    {
+      "codigo": 401,
+      "latitud": -0.95,
+      "longitud": -73.0,
+      "departamento": "Amazonas",
+      "municipio": "Leticia",
+      "region": "Amazonía",
+      "estado": "COMPLETADO",
+      "fecha_asignacion": "2024-02-15"
+    },
+    {
+      "codigo": 501,
+      "latitud": 4.15,
+      "longitud": -72.3,
+      "departamento": "Meta",
+      "municipio": "Villavicencio",
+      "region": "Orinoquía",
+      "estado": "COMPLETADO",
+      "fecha_asignacion": "2024-02-20"
+    }
+  ],
+  "brigadas": [
+    {
+      "nombre_lider": "Jair Alexander Sánchez",
+      "integrantes": ["María González", "Carlos Rodríguez", "Pedro Vargas"],
+      "region": "Andina"
+    },
+    {
+      "nombre_lider": "Laura Mendoza",
+      "integrantes": ["Ana López", "Jorge Gómez"],
+      "region": "Andina"
+    },
+    {
+      "nombre_lider": "Roberto Díaz",
+      "integrantes": ["Sofia Hernández", "Miguel Torres"],
+      "region": "Caribe"
+    },
+    {
+      "nombre_lider": "Ever José Blandón",
+      "integrantes": ["Lucía Castro", "Andrés Ruiz"],
+      "region": "Pacífico"
+    },
+    {
+      "nombre_lider": "Carmen Valencia",
+      "integrantes": ["Fernando Soto", "Isabel Peña"],
+      "region": "Amazonía"
+    }
+  ],
+  "muestras": [
+    {
+      "nombre_comun": "Abedul",
+      "nombre_cientifico": "Betula pendula",
+      "familia": "Betulaceae",
+      "tipo_arbol": "BRINZAL",
+      "uso": "MADERABLE"
+    },
+    {
+      "nombre_comun": "Eucalipto",
+      "nombre_cientifico": "Eucalyptus globulus",
+      "familia": "Myrtaceae",
+      "tipo_arbol": "FUSTAL",
+      "uso": "MADERABLE"
+    },
+    {
+      "nombre_comun": "Cedro",
+      "nombre_cientifico": "Cedrela odorata",
+      "familia": "Meliaceae",
+      "tipo_arbol": "FUSTAL",
+      "uso": "MADERABLE"
+    },
+    {
+      "nombre_comun": "Guayacán",
+      "nombre_cientifico": "Tabebuia chrysantha",
+      "familia": "Bignoniaceae",
+      "tipo_arbol": "LATIZAL",
+      "uso": "ORNAMENTAL"
+    },
+    {
+      "nombre_comun": "Palma de cera",
+      "nombre_cientifico": "Ceroxylon quindiuense",
+      "familia": "Arecaceae",
+      "tipo_arbol": "FUSTAL",
+      "uso": "ORNAMENTAL"
+    },
+    {
+      "nombre_comun": "Caoba",
+      "nombre_cientifico": "Swietenia macrophylla",
+      "familia": "Meliaceae",
+      "tipo_arbol": "FUSTAL",
+      "uso": "MADERABLE"
+    },
+    {
+      "nombre_comun": "Abarco",
+      "nombre_cientifico": "Cariniana pyriformis",
+      "familia": "Lecythidaceae",
+      "tipo_arbol": "FUSTAL",
+      "uso": "MADERABLE"
+    },
+    {
+      "nombre_comun": "Balso",
+      "nombre_cientifico": "Ochroma pyramidale",
+      "familia": "Malvaceae",
+      "tipo_arbol": "FUSTAL",
+      "uso": "MADERABLE"
+    },
+    {
+      "nombre_comun": "Arazá",
+      "nombre_cientifico": "Eugenia stipitata",
+      "familia": "Myrtaceae",
+      "tipo_arbol": "LATIZAL",
+      "uso": "ALIMENTICIO"
+    },
+    {
+      "nombre_comun": "Roble",
+      "nombre_scientifico": "Quercus humboldtii",
+      "familia": "Fagaceae",
+      "tipo_arbol": "FUSTAL",
+      "uso": "MADERABLE"
+    }
+  ],
+  "regiones": ["Andina", "Caribe", "Pacífico", "Amazonía", "Orinoquía"],
+  "usos": ["MADERABLE", "MEDICINAL", "ALIMENTICIO", "ORNAMENTAL"],
+  "tipos_arbol": ["BRINZAL", "LATIZAL", "FUSTAL"]
+}

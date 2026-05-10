@@ -1,0 +1,22 @@
+{
+  "name": "inventario-forestal-ifn",
+  "version": "1.0.0",
+  "description": "Sistema de Información del Inventario Forestal Nacional - IDEAM",
+  "main": "public/js/app.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "vercel build",
+    "start": "vercel start"
+  },
+  "keywords": [
+    "inventario-forestal",
+    "ideam",
+    "bosques",
+    "colombia"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "vercel": "^32.0.0"
+  }
+}

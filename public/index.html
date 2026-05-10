@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IFN - Inventario Forestal Nacional</title>
+    <link rel="icon" href="img/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Configuración de Supabase - debe cargarse primero -->
+    <script src="config.js"></script>
+    
+    <!-- Flatpickr - Selector de fechas con tema oscuro -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <img src="img/favicon.ico" alt="IFN Colombia" width="32" height="32">
+                    <span class="logo-text">IFN Colombia</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#/" class="nav-item active" data-route="/">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#/registrar" class="nav-item" data-route="/registrar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5v14M5 12h14"></path>
+                    </svg>
+                    <span>Registrar</span>
+                </a>
+                <a href="#/consultar" class="nav-item" data-route="/consultar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="M21 21l-4.35-4.35"></path>
+                    </svg>
+                    <span>Consultar</span>
+                </a>
+                <a href="#/exportar" class="nav-item" data-route="/exportar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7,10 12,15 17,10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span>Exportar</span>
+                </a>
+                <div class="nav-divider"></div>
+                <button id="btn-datos-ejemplo" class="nav-item nav-button">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14,2 14,8 20,8"></polyline>
+                    </svg>
+                    <span>Datos de Ejemplo</span>
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="connection-status" id="connection-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Conectando...</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="main-header">
+                <button class="menu-toggle" id="menu-toggle">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
+                <h1 class="page-title" id="page-title">Dashboard</h1>
+                <div class="header-actions">
+                    <a href="#/login" class="header-admin-btn" id="btn-admin-header" title="Panel de Administrador">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                        <span>Admin</span>
+                    </a>
+                    <button class="header-logout-btn hidden" id="btn-logout-header" title="Cerrar Sesión">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16,17 21,12 16,7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        <span>Salir</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Content Area -->
+            <div class="content-area" id="content-area">
+                <!-- Dashboard View -->
+                <div id="view-dashboard" class="view active">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #238636;">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                                    <path d="M3 3h18v18H3z"></path>
+                                    <path d="M3 9h18"></path>
+                                    <path d="M9 21V9"></path>
+                                </svg>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="stat-conglomerados">0</span>
+                                <span class="stat-label">Conglomerados</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #58a6ff;">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                </svg>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="stat-brigadas">0</span>
+                                <span class="stat-label">Brigadas</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #d29922;">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                                    <path d="M2 17l10 5 10-5"></path>
+                                    <path d="M2 12l10 5 10-5"></path>
+                                </svg>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="stat-muestras">0</span>
+                                <span class="stat-label">Muestras</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #f85149;">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                </svg>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="stat-amenazadas">0</span>
+                                <span class="stat-label">Amenazadas</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Distribución por Región</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container" id="chart-regiones"></div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Últimas Inspecciones</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-container">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Fecha</th>
+                                                <th>Conglomerado</th>
+                                                <th>Región</th>
+                                                <th>Estado</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tabla-inspecciones"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Registrar View -->
+                <div id="view-registrar" class="view">
+                    <div class="registrar-menu">
+                        <h2>Seleccionar Tipo de Registro</h2>
+                        <div class="registrar-options">
+                            <button class="registrar-option" data-form="conglomerado">
+                                <div class="option-icon">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                                        <path d="M3 9h18"></path>
+                                        <path d="M9 21V9"></path>
+                                    </svg>
+                                </div>
+                                <span>Conglomerado</span>
+                            </button>
+                            <button class="registrar-option" data-form="brigada">
+                                <div class="option-icon">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                        <circle cx="9" cy="7" r="4"></circle>
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                    </svg>
+                                </div>
+                                <span>Brigada</span>
+                            </button>
+                            <button class="registrar-option" data-form="muestra">
+                                <div class="option-icon">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                                        <path d="M2 17l10 5 10-5"></path>
+                                        <path d="M2 12l10 5 10-5"></path>
+                                    </svg>
+                                </div>
+                                <span>Muestra Vegetal</span>
+                            </button>
+                            <button class="registrar-option" data-form="conteo">
+                                <div class="option-icon">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                                    </svg>
+                                </div>
+                                <span>Conteo DAP</span>
+                            </button>
+                            <button class="registrar-option" data-form="inspeccion">
+                                <div class="option-icon">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14,2 14,8 20,8"></polyline>
+                                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                                    </svg>
+                                </div>
+                                <span>Inspección</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Formularios -->
+                    <div id="form-conglomerado" class="form-container hidden">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Registrar Conglomerado</h3>
+                            </div>
+                            <div class="card-body">
+                                <form id="form-cg">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="cg-codigo">Código</label>
+                                            <input type="number" id="cg-codigo" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cg-region">Región</label>
+                                            <select id="cg-region" required>
+                                                <option value="">Seleccionar...</option>
+                                                <option value="Andina">Andina</option>
+                                                <option value="Caribe">Caribe</option>
+                                                <option value="Pacífico">Pacífico</option>
+                                                <option value="Amazonía">Amazonía</option>
+                                                <option value="Orinoquía">Orinoquía</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="cg-departamento">Departamento</label>
+                                            <input type="text" id="cg-departamento" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cg-municipio">Municipio</label>
+                                            <input type="text" id="cg-municipio" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="cg-latitud">Latitud</label>
+                                            <input type="number" step="0.0001" id="cg-latitud" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cg-longitud">Longitud</label>
+                                            <input type="number" step="0.0001" id="cg-longitud" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="cg-estado">Estado</label>
+                                            <select id="cg-estado" required>
+                                                <option value="PENDIENTE">Pendiente</option>
+                                                <option value="EN_PROGRESO">En Progreso</option>
+                                                <option value="COMPLETADO">Completado</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cg-fecha">Fecha de Asignación</label>
+                                            <input type="text" id="cg-fecha" class="datepicker" placeholder="Seleccionar fecha" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit" class="btn btn-primary">Guardar</button>
+                                        <button type="button" class="btn btn-secondary" onclick="Router.navigate('/registrar')">Cancelar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="form-brigada" class="form-container hidden">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Registrar Brigada</h3>
+                            </div>
+                            <div class="card-body">
+                                <form id="form-br">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="br-conglomerado">Conglomerado</label>
+                                            <select id="br-conglomerado" required>
+                                                <option value="">Seleccionar...</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="br-lider">Nombre del Líder</label>
+                                            <input type="text" id="br-lider" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="br-integrantes">Integrantes (separados por coma)</label>
+                                        <input type="text" id="br-integrantes" placeholder="Juan, María, Pedro">
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="br-region">Región</label>
+                                            <select id="br-region" required>
+                                                <option value="">Seleccionar...</option>
+                                                <option value="Andina">Andina</option>
+                                                <option value="Caribe">Caribe</option>
+                                                <option value="Pacífico">Pacífico</option>
+                                                <option value="Amazonía">Amazonía</option>
+                                                <option value="Orinoquía">Orinoquía</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="br-fecha-inicio">Fecha Inicio</label>
+                                            <input type="text" id="br-fecha-inicio" class="datepicker" placeholder="Seleccionar fecha" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="br-fecha-fin">Fecha Fin</label>
+                                            <input type="text" id="br-fecha-fin" class="datepicker" placeholder="Seleccionar fecha">
+                                        </div>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit" class="btn btn-primary">Guardar</button>
+                                        <button type="button" class="btn btn-secondary" onclick="Router.navigate('/registrar')">Cancelar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="form-muestra" class="form-container hidden">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Registrar Muestra Vegetal</h3>
+                            </div>
+                            <div class="card-body">
+                                <form id="form-mu">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="mu-brigada">Brigada</label>
+                                            <select id="mu-brigada" required>
+                                                <option value="">Seleccionar...</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="mu-nombre-comun">Nombre Común</label>
+                                            <input type="text" id="mu-nombre-comun" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="mu-tipo">Tipo de Árbol</label>
+                                            <select id="mu-tipo" required>
+                                                <option value="">Seleccionar...</option>
+                                                <option value="BRINZAL">Brinzal (DAP < 10 cm)</option>
+                                                <option value="LATIZAL">Latizal (DAP 10-30 cm)</option>
+                                                <option value="FUSTAL">Fustal (DAP > 30 cm)</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="mu-uso">Uso</label>
+                                            <select id="mu-uso" required>
+                                                <option value="">Seleccionar...</option>
+                                                <option value="MADERABLE">Maderable</option>
+                                                <option value="MEDICINAL">Medicinal</option>
+                                                <option value="ALIMENTICIO">Alimenticio</option>
+                                                <option value="ORNAMENTAL">Ornamental</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="mu-codigo">Código de Identificación</label>
+                                            <input type="text" id="mu-codigo" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="mu-estado">Estado de Clasificación</label>
+                                            <select id="mu-estado" required>
+                                                <option value="PENDIENTE">Pendiente</option>
+                                                <option value="IDENTIFICADO">Identificado</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="mu-cientifico">Nombre Científico (opcional)</label>
+                                            <input type="text" id="mu-cientifico" placeholder="Se llena después del laboratorio">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="mu-familia">Familia Botánica (opcional)</label>
+                                            <input type="text" id="mu-familia">
+                                        </div>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit" class="btn btn-primary">Guardar</button>
+                                        <button type="button" class="btn btn-secondary" onclick="Router.navigate('/registrar')">Cancelar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="form-conteo" class="form-container hidden">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Registrar Conteo DAP</h3>
+                            </div>
+                            <div class="card-body">
+                                <form id="form-ct">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="ct-brigada">Brigada</label>
+                                            <select id="ct-brigada" required>
+                                                <option value="">Seleccionar...</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="ct-subparcela">Subparcela</label>
+                                            <input type="number" min="1" max="5" id="ct-subparcela" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="ct-brinzales">Brinzales (DAP < 10 cm)</label>
+                                            <input type="number" min="0" id="ct-brinzales" value="0">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="ct-latizales">Latizales (DAP 10-30 cm)</label>
+                                            <input type="number" min="0" id="ct-latizales" value="0">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="ct-fustales">Fustales (DAP > 30 cm)</label>
+                                            <input type="number" min="0" id="ct-fustales" value="0">
+                                        </div>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit" class="btn btn-primary">Guardar</button>
+                                        <button type="button" class="btn btn-secondary" onclick="Router.navigate('/registrar')">Cancelar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="form-inspeccion" class="form-container hidden">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Registrar Inspección</h3>
+                            </div>
+                            <div class="card-body">
+                                <form id="form-ins">
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="ins-conglomerado">Conglomerado</label>
+                                            <select id="ins-conglomerado" required>
+                                                <option value="">Seleccionar...</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="ins-brigada">Brigada</label>
+                                            <select id="ins-brigada" required>
+                                                <option value="">Seleccionar...</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="ins-fecha">Fecha</label>
+                                            <input type="text" id="ins-fecha" class="datepicker" placeholder="Seleccionar fecha" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="ins-clima">Clima</label>
+                                            <select id="ins-clima" required>
+                                                <option value="">Seleccionar...</option>
+                                                <option value="SOLEADO">Soleado</option>
+                                                <option value="NUBLADO">Nublado</option>
+                                                <option value="LLUVIOSO">Lluvioso</option>
+                                                <option value="PARCIAL">Parcialmente nublado</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="ins-duracion">Duración (horas)</label>
+                                            <input type="number" min="1" max="24" id="ins-duracion" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ins-observaciones">Observaciones</label>
+                                        <textarea id="ins-observaciones" rows="3" placeholder="Observaciones de la jornada..."></textarea>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit" class="btn btn-primary">Guardar</button>
+                                        <button type="button" class="btn btn-secondary" onclick="Router.navigate('/registrar')">Cancelar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Consultar View -->
+                <div id="view-consultar" class="view">
+                    <div class="consulta-filters">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Filtros de Búsqueda</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="filters-grid">
+                                    <div class="filter-group">
+                                        <label for="filter-tipo">Tipo de Búsqueda</label>
+                                        <select id="filter-tipo">
+                                            <option value="inspeccion">Inspección</option>
+                                            <option value="conglomerado">Conglomerado</option>
+                                            <option value="brigada">Brigada</option>
+                                            <option value="muestra">Muestra</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="filter-id">ID / Código</label>
+                                        <input type="text" id="filter-id" placeholder="Ej: INS001, 208">
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="filter-region">Región</label>
+                                        <select id="filter-region">
+                                            <option value="">Todas</option>
+                                            <option value="Andina">Andina</option>
+                                            <option value="Caribe">Caribe</option>
+                                            <option value="Pacífico">Pacífico</option>
+                                            <option value="Amazonía">Amazonía</option>
+                                            <option value="Orinoquía">Orinoquía</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="filter-departamento">Departamento</label>
+                                        <input type="text" id="filter-departamento" placeholder="Ej: Meta">
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="filter-uso">Uso de Especie</label>
+                                        <select id="filter-uso">
+                                            <option value="">Todos</option>
+                                            <option value="MADERABLE">Maderable</option>
+                                            <option value="MEDICINAL">Medicinal</option>
+                                            <option value="ALIMENTICIO">Alimenticio</option>
+                                            <option value="ORNAMENTAL">Ornamental</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="filter-fecha-inicio">Fecha Inicio</label>
+                                        <input type="text" id="filter-fecha-inicio" class="datepicker" placeholder="Seleccionar">
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="filter-fecha-fin">Fecha Fin</label>
+                                        <input type="text" id="filter-fecha-fin" class="datepicker" placeholder="Seleccionar">
+                                    </div>
+                                    <div class="filter-actions">
+                                        <button class="btn btn-primary" id="btn-buscar">Buscar</button>
+                                        <button class="btn btn-secondary" id="btn-limpiar-filtros">Limpiar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="consulta-resultados">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Resultados</h3>
+                                <span class="result-count" id="result-count">0 resultados</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-container">
+                                    <table class="data-table" id="tabla-resultados">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Fecha</th>
+                                                <th>Conglomerado</th>
+                                                <th>Brigada</th>
+                                                <th>Región</th>
+                                                <th>Departamento</th>
+                                                <th>Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-resultados"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    </div>
+
+                <!-- Exportar View -->
+                <div id="view-exportar" class="view">
+                    <div class="export-options">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Exportar Datos</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="export-filters">
+                                    <div class="filter-group">
+                                        <label for="export-tipo">Tipo de Datos</label>
+                                        <select id="export-tipo">
+                                            <option value="todos">Todos los datos</option>
+                                            <option value="conglomerados">Solo Conglomerados</option>
+                                            <option value="brigadas">Solo Brigadas</option>
+                                            <option value="muestras">Solo Muestras</option>
+                                            <option value="inspecciones">Solo Inspecciones</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="export-region">Filtrar por Región</label>
+                                        <select id="export-region">
+                                            <option value="">Todas</option>
+                                            <option value="Andina">Andina</option>
+                                            <option value="Caribe">Caribe</option>
+                                            <option value="Pacífico">Pacífico</option>
+                                            <option value="Amazonía">Amazonía</option>
+                                            <option value="Orinoquía">Orinoquía</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="export-formato">Formato</label>
+                                        <select id="export-formato">
+                                            <option value="csv">CSV (Excel)</option>
+                                            <option value="json">JSON</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="export-preview">
+                                    <h4>Vista Previa</h4>
+                                    <pre id="export-preview-text">Seleccione opciones y haga clic en "Generar Vista Previa"</pre>
+                                </div>
+                                <div class="export-actions">
+                                    <button class="btn btn-secondary" id="btn-preview">Vista Previa</button>
+                                    <button class="btn btn-primary" id="btn-exportar">Exportar</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modales globales (fuera de vistas) -->
+                <!-- Modal Login -->
+                <div id="modal-login" class="modal hidden">
+                    <div class="modal-overlay"></div>
+                    <div class="modal-content" style="max-width: 400px;">
+                        <div class="modal-header">
+                            <h3>Iniciar Sesión</h3>
+                            <button class="modal-close" id="modal-login-cerrar">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="form-login">
+                                <div class="form-group">
+                                    <label for="login-email">Email</label>
+                                    <input type="email" id="login-email" required placeholder="email@ejemplo.com">
+                                </div>
+                                <div class="form-group">
+                                    <label for="login-password">Contraseña</label>
+                                    <input type="password" id="login-password" required placeholder="••••••••">
+                                </div>
+                                <div id="login-error" class="form-error hidden"></div>
+                                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 16px;">
+                                    Iniciar Sesión
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal Detalle -->
+                <div id="modal-detalle" class="modal hidden">
+                    <div class="modal-overlay"></div>
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>Detalle de Inspección</h3>
+                            <button class="modal-close" id="modal-close">&times;</button>
+                        </div>
+                        <div class="modal-body" id="modal-body"></div>
+                    </div>
+                </div>
+
+                <!-- Modal Editar -->
+                <div id="modal-editar" class="modal hidden">
+                    <div class="modal-overlay"></div>
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3 id="modal-editar-titulo">Editar Registro</h3>
+                            <button class="modal-close" id="modal-editar-cerrar">&times;</button>
+                        </div>
+                        <div class="modal-body" id="modal-editar-body"></div>
+                    </div>
+                </div>
+
+                <!-- Admin View -->
+                <div id="view-admin" class="view">
+                    <div class="admin-container">
+                        <div class="admin-header">
+                            <h2>Panel de Administración</h2>
+                            <p class="text-muted">Gestiona todos los registros del sistema</p>
+                        </div>
+                        
+                        <div class="admin-tabs">
+                            <button class="admin-tab active" data-tab="conglomerados">Conglomerados</button>
+                            <button class="admin-tab" data-tab="brigadas">Brigadas</button>
+                            <button class="admin-tab" data-tab="muestras">Muestras</button>
+                            <button class="admin-tab" data-tab="conteos">Conteos</button>
+                            <button class="admin-tab" data-tab="inspecciones">Inspecciones</button>
+                            <button class="admin-tab admin-tab-supremo" data-tab="admins" style="display: none;">Admins</button>
+                        </div>
+
+                        <div class="admin-content">
+                            <div class="admin-toolbar">
+                                <input type="text" id="admin-search" placeholder="Buscar..." class="admin-search">
+                                <button class="btn btn-primary" id="btn-admin-nuevo" style="display: none;">Nuevo</button>
+                                <button class="btn btn-secondary" id="btn-admin-refresh">Actualizar</button>
+                            </div>
+                            
+                            <div class="admin-table-container">
+                                <table class="data-table admin-table" id="admin-table">
+                                    <thead id="admin-thead"></thead>
+                                    <tbody id="admin-tbody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+
+    <script src="js/supabaseClient.js"></script>
+    <script src="js/services.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/router.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

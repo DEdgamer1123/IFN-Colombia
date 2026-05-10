@@ -1,0 +1,31 @@
+# ============================================
+# Ignorar archivos sensibles
+# ============================================
+
+# Configuración local (contiene credenciales)
+public/config.js
+
+# Archivos de entorno
+.env
+.env.local
+.env.*.local
+
+# Dependencias node
+node_modules/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Build
+dist/
+.vercel/
