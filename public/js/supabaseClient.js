@@ -12,22 +12,89 @@
 
 // Función para obtener variables de entorno (soporta Vercel y desarrollo local)
 const getEnv = (key, fallback = '') => {
-    // 1.优先: window.__ENV__ (inyectado por Vercel)
+    // 1. 우선: window.__ENV__ (inyectado por Vercel)
     if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__[key]) {
         return window.__ENV__[key];
     }
-    // 2. Fallback: import.meta.env (Vite/Webpack)
-    if (typeof importMeta !== 'undefined' && importMeta.env && importMeta.env[key]) {
-        return importMeta.env[key];
-    }
-    // 3. Fallback: variables globales (desarrollo)
+    // 2. Fallback: variables globales (desarrollo local con config.js)
     if (typeof window !== 'undefined' && window[key]) {
         return window[key];
     }
     return fallback;
 };
 
-// Configuración lazy - se resuelve cuando se usa, no cuando se carga el script
+// Sanitizar ID para prevenir inyección SQL/NoSQL
+const sanitizeId = (id) => {
+    if (!id || typeof id !== 'string') return '';
+    // Solo permitir caracteres válidos para UUID: letras, números, guiones
+    return id.replace(/[^a-fA-F0-9\-]/g, '').trim();
+};
+
+// Sanitizar filtros de búsqueda
+const sanitizeFilter = (value) => {
+    if (!value || typeof value !== 'string') return '';
+    // Remover caracteres peligrosos
+    return value.replace(/['";<>\-]/g, '').trim();
+};
+
+// Esperar a que el SDK de Supabase esté disponible
+const waitForSupabaseSDK = (options = {}) => {
+    const { timeout = 5000, interval = 100, retries = 50 } = options;
+
+    return new Promise((resolve, reject) => {
+        let attempts = 0;
+
+        const check = () => {
+            attempts++;
+
+            if (window.createSupabaseClient) {
+                return true;
+            }
+
+            if (attempts >= retries) {
+                return false;
+            }
+
+            return false;
+        };
+
+        // 1. Verificar inmediatamente
+        if (check()) {
+            resolve(true);
+            return;
+        }
+
+        // 2. Escuchar evento cuando el módulo cargue
+        const onReady = () => {
+            cleanup();
+            resolve(true);
+        };
+        window.addEventListener('supabase-sdk-ready', onReady);
+
+        // 3. Polling de seguridad
+        const intervalId = setInterval(() => {
+            if (check()) {
+                cleanup();
+                resolve(true);
+            }
+        }, interval);
+
+        const cleanup = () => {
+            clearInterval(intervalId);
+            window.removeEventListener('supabase-sdk-ready', onReady);
+        };
+
+        // 4. Timeout
+        setTimeout(() => {
+            cleanup();
+            if (!window.createSupabaseClient) {
+                reject(new Error('SDK_TIMEOUT'));
+            }
+        }, timeout);
+    });
+};
+
+// Configuración lazy - se resolve cuando se usa, no cuando se carga el script
 const supabaseClient = {
     get url() {
         return getEnv('VITE_SUPABASE_URL', getEnv('SUPABASE_URL', ''));
@@ -44,11 +111,59 @@ const supabaseClient = {
             console.error('❌ Credenciales de Supabase no configuradas');
             throw new Error('Credenciales de Supabase no configuradas');
         }
+
+        // Para GET (SELECT públicos): usar ANON_KEY directamente
+        if (method === 'GET') {
+            const headers = {
+                'Content-Type': 'application/json',
+                'apikey': key,
+                'Authorization': `Bearer ${key}`
+            };
+
+            const options = {
+                method: 'GET',
+                headers: headers
+            };
+
+            try {
+                const response = await fetch(`${this.url}/rest/v1/${endpoint}`, options);
+                
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({ message: `Error ${response.status}` }));
+                    throw new Error(error.message || `Error ${response.status}`);
+                }
+
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    return await response.json();
+                }
+                return null;
+            } catch (error) {
+                // Para GET públicos, no lanzar SESION_EXPIRADA
+                // Simplemente propagar el error
+                throw error;
+            }
+        }
+
+        // Para POST/PATCH/DELETE (requieren auth): verificar sesión
+        const session = this.getSessionSync();
+        if (session && session.expires_at) {
+            const now = Math.floor(Date.now() / 1000);
+            if (now >= session.expires_at - 60) {
+                const refreshed = await this.refreshSession();
+                if (!refreshed) {
+                    throw new Error('SESION_EXPIRADA');
+                }
+            }
+        }
+
+        const accessToken = this.getAccessToken();
+        const authToken = accessToken || key;
         
         const headers = {
             'Content-Type': 'application/json',
             'apikey': key,
-            'Authorization': `Bearer ${key}`
+            'Authorization': `Bearer ${authToken}`
         };
 
         // Para operaciones de escritura, pedir que retorne los datos creados
@@ -68,7 +183,26 @@ const supabaseClient = {
         const response = await fetch(`${this.url}/rest/v1/${endpoint}`, options);
         
         if (!response.ok) {
-            const error = await response.json();
+            if (response.status === 401) {
+                if (session && session.refresh_token) {
+                    const refreshed = await this.refreshSession();
+                    if (refreshed) {
+                        const newAccessToken = this.getAccessToken();
+                        headers['Authorization'] = `Bearer ${newAccessToken}`;
+                        const retryResponse = await fetch(`${this.url}/rest/v1/${endpoint}`, options);
+                        if (retryResponse.ok) {
+                            const contentType = retryResponse.headers.get('content-type');
+                            if (contentType && contentType.includes('application/json')) {
+                                return await retryResponse.json();
+                            }
+                            return null;
+                        }
+                    }
+                }
+                await this.logout();
+                throw new Error('SESION_EXPIRADA');
+            }
+            const error = await response.json().catch(() => ({ message: `Error ${response.status}` }));
             throw new Error(error.message || `Error ${response.status}`);
         }
 
@@ -99,11 +233,13 @@ const supabaseClient = {
     },
 
     async updateConglomerado(id, data) {
-        return await this.request(`conglomerados?id=eq.${id}`, 'PATCH', data);
+        const safeId = sanitizeId(id);
+        return await this.request(`conglomerados?id=eq.${safeId}`, 'PATCH', data);
     },
 
     async deleteConglomerado(id) {
-        return await this.request(`conglomerados?id=eq.${id}`, 'DELETE');
+        const safeId = sanitizeId(id);
+        return await this.request(`conglomerados?id=eq.${safeId}`, 'DELETE');
     },
 
     // ==================== BRIGADAS ====================
@@ -126,11 +262,13 @@ const supabaseClient = {
     },
 
     async updateBrigada(id, data) {
-        return await this.request(`brigadas?id=eq.${id}`, 'PATCH', data);
+        const safeId = sanitizeId(id);
+        return await this.request(`brigadas?id=eq.${safeId}`, 'PATCH', data);
     },
 
     async deleteBrigada(id) {
-        return await this.request(`brigadas?id=eq.${id}`, 'DELETE');
+        const safeId = sanitizeId(id);
+        return await this.request(`brigadas?id=eq.${safeId}`, 'DELETE');
     },
 
     // ==================== MUESTRAS ====================
@@ -158,11 +296,13 @@ const supabaseClient = {
     },
 
     async updateMuestra(id, data) {
-        return await this.request(`muestras?id=eq.${id}`, 'PATCH', data);
+        const safeId = sanitizeId(id);
+        return await this.request(`muestras?id=eq.${safeId}`, 'PATCH', data);
     },
 
     async deleteMuestra(id) {
-        return await this.request(`muestras?id=eq.${id}`, 'DELETE');
+        const safeId = sanitizeId(id);
+        return await this.request(`muestras?id=eq.${safeId}`, 'DELETE');
     },
 
     // ==================== CONTEO DAP ====================
@@ -216,11 +356,13 @@ const supabaseClient = {
     },
 
     async updateInspeccion(id, data) {
-        return await this.request(`inspecciones?id=eq.${id}`, 'PATCH', data);
+        const safeId = sanitizeId(id);
+        return await this.request(`inspecciones?id=eq.${safeId}`, 'PATCH', data);
     },
 
     async deleteInspeccion(id) {
-        return await this.request(`inspecciones?id=eq.${id}`, 'DELETE');
+        const safeId = sanitizeId(id);
+        return await this.request(`inspecciones?id=eq.${safeId}`, 'DELETE');
     },
 
     // ==================== CONSULTAS COMBINADAS ====================
@@ -394,13 +536,15 @@ const supabaseClient = {
         let query = 'inspecciones?select=*&order=fecha.desc';
         
         if (filtros.id) {
-            query += `&id=eq.${filtros.id}`;
+            query += `&id=eq.${sanitizeId(filtros.id)}`;
         }
         if (filtros.fechaInicio) {
-            query += `&fecha=gte.${filtros.fechaInicio}`;
+            const safeFecha = sanitizeFilter(filtros.fechaInicio);
+            query += `&fecha=gte.${safeFecha}`;
         }
         if (filtros.fechaFin) {
-            query += `&fecha=lte.${filtros.fechaFin}`;
+            const safeFecha = sanitizeFilter(filtros.fechaFin);
+            query += `&fecha=lte.${safeFecha}`;
         }
 
         const inspecciones = await this.request(query);
@@ -437,16 +581,16 @@ const supabaseClient = {
         let query = 'conglomerados?select=*&order=created_at.desc';
         
         if (filtros.id) {
-            query += `&id=eq.${filtros.id}`;
+            query += `&id=eq.${sanitizeId(filtros.id)}`;
         }
         if (filtros.codigo) {
-            query += `&codigo=eq.${filtros.codigo}`;
+            query += `&codigo=eq.${sanitizeFilter(filtros.codigo)}`;
         }
         if (filtros.region) {
-            query += `&region=eq.${filtros.region}`;
+            query += `&region=eq.${sanitizeFilter(filtros.region)}`;
         }
         if (filtros.departamento) {
-            query += `&departamento=ilike.*${filtros.departamento}*`;
+            query += `&departamento=ilike.*${sanitizeFilter(filtros.departamento)}*`;
         }
 
         return await this.request(query);
@@ -456,13 +600,13 @@ const supabaseClient = {
         let query = 'brigadas?select=*&order=created_at.desc';
         
         if (filtros.id) {
-            query += `&id=eq.${filtros.id}`;
+            query += `&id=eq.${sanitizeId(filtros.id)}`;
         }
         if (filtros.idConglomerado) {
-            query += `&id_conglomerado=eq.${filtros.idConglomerado}`;
+            query += `&id_conglomerado=eq.${sanitizeId(filtros.idConglomerado)}`;
         }
         if (filtros.region) {
-            query += `&region=eq.${filtros.region}`;
+            query += `&region=eq.${sanitizeFilter(filtros.region)}`;
         }
 
         return await this.request(query);
@@ -472,16 +616,16 @@ const supabaseClient = {
         let query = 'muestras?select=*&order=created_at.desc';
         
         if (filtros.id) {
-            query += `&id=eq.${filtros.id}`;
+            query += `&id=eq.${sanitizeId(filtros.id)}`;
         }
         if (filtros.idBrigada) {
-            query += `&id_brigada=eq.${filtros.idBrigada}`;
+            query += `&id_brigada=eq.${sanitizeId(filtros.idBrigada)}`;
         }
         if (filtros.uso) {
-            query += `&uso=eq.${filtros.uso}`;
+            query += `&uso=eq.${sanitizeFilter(filtros.uso)}`;
         }
         if (filtros.nombreComun) {
-            query += `&nombre_comun=ilike.*${filtros.nombreComun}*`;
+            query += `&nombre_comun=ilike.*${sanitizeFilter(filtros.nombreComun)}*`;
         }
 
         return await this.request(query);
@@ -506,52 +650,107 @@ const supabaseClient = {
         };
     },
 
-    // ==================== AUTH - AUTENTICACIÓN ====================
+    // ==================== AUTH - AUTENTICACIÓN CON SUPABASE JS SDK ====================
+    
+    // Cliente de Supabase Auth (usando SDK oficial via ES6 Module)
+    get supabaseAuth() {
+        if (!this._supabaseAuth && this.url && this.key && window.createSupabaseClient) {
+            this._supabaseAuth = window.createSupabaseClient(this.url, this.key);
+        }
+        return this._supabaseAuth;
+    },
+
     async login(email, password) {
         try {
-            const url = this.url;
-            const key = this.key;
-            
-            if (!url || !key) {
+            if (!this.url || !this.key) {
                 throw new Error('Credenciales de Supabase no configuradas. Verifica config.js');
             }
-            
-            const response = await fetch(`${url}/rest/v1/admins?email=eq.${encodeURIComponent(email)}&select=*`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'apikey': this.key,
-                    'Authorization': `Bearer ${this.key}`
+
+            // Asegurar que el SDK esté listo antes de intentar login
+            if (!this.supabaseAuth) {
+                console.log('⏳ Esperando SDK de Supabase...');
+                try {
+                    await waitForSupabaseSDK();
+                } catch (sdkError) {
+                    throw new Error('Error de conexión. Recarga la página e intenta de nuevo.');
                 }
+
+                // Verificar nuevamente después de esperar
+                if (!this.supabaseAuth) {
+                    this._supabaseAuth = window.createSupabaseClient(this.url, this.key);
+                }
+            }
+
+            // Usar el SDK de Supabase para autenticar
+            const { data, error } = await this.supabaseAuth.auth.signInWithPassword({
+                email, password
             });
             
-            if (!response.ok) {
-                throw new Error('Error de conexión');
+            if (error) {
+                throw new Error(error.message || 'Usuario no encontrado o contraseña incorrecta');
             }
             
-            const admins = await response.json();
-            
-            if (!admins || admins.length === 0) {
-                throw new Error('Usuario no encontrado');
+            if (!data || !data.session) {
+                throw new Error('Error en la autenticación');
             }
+
+            const authData = data;
+            const user = authData.user;
             
-            const admin = admins[0];
+            // Verificar que el usuario tiene un rol asignado
+            const appMeta = user.app_metadata || {};
+            const userMeta = user.user_metadata || {};
             
-            if (admin.password !== password) {
-                throw new Error('Contraseña incorrecta');
+            if (!appMeta.rol) {
+                throw new Error('Usuario no autorizado. Contacta al administrador.');
             }
-            
-            // Guardar sesión en localStorage
+
+            // Obtener el nombre desde profile (más actualizado)
+            let nombre = userMeta.nombre || 'Usuario';
+            try {
+                const profileResponse = await fetch(
+                    `${this.url}/rest/v1/profiles?id=eq.${user.id}&select=nombre`,
+                    {
+                        headers: {
+                            'apikey': this.key,
+                            'Authorization': `Bearer ${authData.session.access_token}`
+                        }
+                    }
+                );
+                if (profileResponse.ok) {
+                    const profiles = await profileResponse.json();
+                    if (profiles && profiles.length > 0 && profiles[0].nombre) {
+                        nombre = profiles[0].nombre;
+                    }
+                }
+            } catch (e) {
+                console.log('Profile not found, using metadata name');
+            }
+
+            // Guardar sesión completa
             const session = {
-                id: admin.id,
-                email: admin.email,
-                nombre: admin.nombre,
-                rol: admin.rol,
+                access_token: authData.session.access_token,
+                refresh_token: authData.session.refresh_token,
+                expires_in: authData.session.expires_in,
+                expires_at: Math.floor(Date.now() / 1000) + authData.session.expires_in,
+                user: {
+                    id: user.id,
+                    email: user.email
+                },
+                admin: {
+                    id: user.id,
+                    email: user.email,
+                    nombre: nombre,
+                    rol: appMeta.rol,
+                    es_supremo: appMeta.es_supremo || false
+                },
                 loginAt: new Date().toISOString()
             };
-            localStorage.setItem('adminSession', JSON.stringify(session));
             
-            console.log('✅ Login exitoso:', admin.nombre, '- Rol:', admin.rol);
+            localStorage.setItem('supabaseSession', JSON.stringify(session));
+            localStorage.setItem('adminSession', JSON.stringify(session.admin));
+            
+            console.log('✅ Login exitoso:', nombre, '- Rol:', appMeta.rol);
             return session;
         } catch (error) {
             console.error('❌ Error en login:', error.message);
@@ -559,46 +758,232 @@ const supabaseClient = {
         }
     },
 
-    logout() {
+    async logout() {
+        try {
+            // Usar el SDK de Supabase para cerrar sesión
+            await this.supabaseAuth.auth.signOut();
+        } catch (e) {
+            // Ignorar errores de logout en servidor
+        }
+        localStorage.removeItem('supabaseSession');
         localStorage.removeItem('adminSession');
         console.log('✅ Sesión cerrada');
     },
 
-    getSession() {
-        const sessionStr = localStorage.getItem('adminSession');
+    async refreshSession() {
+        const session = this.getSessionSync();
+        if (!session || !session.refresh_token) {
+            return null;
+        }
+
+        try {
+            // Usar el SDK de Supabase para refrescar sesión
+            const { data, error } = await this.supabaseAuth.auth.refreshSession();
+            
+            if (error || !data.session) {
+                await this.logout();
+                return null;
+            }
+            
+            const newTokenData = data;
+            
+            // Actualizar sesión en localStorage
+            const newSession = {
+                ...session,
+                access_token: newTokenData.session.access_token,
+                refresh_token: newTokenData.session.refresh_token,
+                expires_at: Math.floor(Date.now() / 1000) + newTokenData.session.expires_in
+            };
+            
+            localStorage.setItem('supabaseSession', JSON.stringify(newSession));
+            console.log('🔄 Token refrescado exitosamente');
+            return newTokenData;
+        } catch (error) {
+            console.error('❌ Error refrescando token:', error.message);
+            await this.logout();
+            return null;
+        }
+    },
+
+    async getSession() {
+        // Usar el SDK de Supabase para obtener sesión
+        const { data } = await this.supabaseAuth.auth.getSession();
+        if (!data.session) return null;
+        
+        const session = data.session;
+        
+        // Verificar si el token expiró
+        if (session.expires_at && Date.now() > session.expires_at * 1000) {
+            await this.logout();
+            return null;
+        }
+
+        return session;
+    },
+
+    getSessionSync() {
+        const sessionStr = localStorage.getItem('supabaseSession');
         if (sessionStr) {
             try {
-                return JSON.parse(sessionStr);
+                const session = JSON.parse(sessionStr);
+                // Verificar estructura válida
+                if (!session || typeof session !== 'object') {
+                    localStorage.removeItem('supabaseSession');
+                    localStorage.removeItem('adminSession');
+                    return null;
+                }
+                // Verificar que tiene access_token
+                if (!session.access_token) {
+                    localStorage.removeItem('supabaseSession');
+                    localStorage.removeItem('adminSession');
+                    return null;
+                }
+                return session;
             } catch {
+                localStorage.removeItem('supabaseSession');
+                localStorage.removeItem('adminSession');
                 return null;
             }
         }
         return null;
     },
 
-    isLoggedIn() {
-        return this.getSession() !== null;
+    async isLoggedIn() {
+        const session = await this.getSession();
+        return session !== null;
+    },
+
+    isLoggedInSync() {
+        const session = this.getSessionSync();
+        return session !== null;
+    },
+
+    getRol() {
+        const session = this.getSessionSync();
+        return session?.admin?.rol || null;
     },
 
     isSupremo() {
-        const session = this.getSession();
-        return session && session.rol === 'supremo';
+        const session = this.getSessionSync();
+        return session?.admin?.es_supremo === true || session?.admin?.rol === 'supremo';
+    },
+
+    getAccessToken() {
+        const session = this.getSessionSync();
+        if (!session || !session.access_token) return null;
+        
+        // Verificar si el token expiró
+        if (session.expires_at && Math.floor(Date.now() / 1000) >= session.expires_at) {
+            return null; // Token expirado, no usar
+        }
+        
+        return session.access_token;
     },
 
     async getAdmins() {
-        return await this.request('admins?select=id,email,nombre,rol,created_at&order=created_at.desc');
+        const token = this.getAccessToken();
+        if (!token) throw new Error('No autenticado');
+        
+        // Llamar a Edge Function para obtener admins
+        const response = await fetch(`${this.url}/functions/v1/get-admins`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Error al obtener admins');
+        }
+        
+        return await response.json();
     },
 
     async createAdmin(data) {
-        return await this.request('admins', 'POST', data);
+        // Solo supremos pueden crear admins
+        if (!this.isSupremo()) {
+            throw new Error('No tienes permisos para crear administradores');
+        }
+        
+        const token = this.getAccessToken();
+        
+        // Llamar a Edge Function para crear admin
+        const response = await fetch(`${this.url}/functions/v1/create-admin`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                email: data.email,
+                password: data.password,
+                nombre: data.nombre,
+                rol: data.rol || 'admin'
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Error al crear admin');
+        }
+        
+        return await response.json();
     },
 
     async updateAdmin(id, data) {
-        return await this.request(`admins?id=eq.${id}`, 'PATCH', data);
+        if (!this.isSupremo()) {
+            throw new Error('No tienes permisos para editar administradores');
+        }
+        
+        const token = this.getAccessToken();
+        
+        // Llamar a Edge Function para actualizar admin
+        const response = await fetch(`${this.url}/functions/v1/update-admin`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                userId: id,
+                email: data.email,
+                nombre: data.nombre,
+                rol: data.rol
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Error al actualizar admin');
+        }
+        
+        return await response.json();
     },
 
     async deleteAdmin(id) {
-        return await this.request(`admins?id=eq.${id}`, 'DELETE');
+        if (!this.isSupremo()) {
+            throw new Error('No tienes permisos para eliminar administradores');
+        }
+        
+        const token = this.getAccessToken();
+        
+        // Llamar a Edge Function para eliminar admin
+        const response = await fetch(`${this.url}/functions/v1/delete-admin`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ userId: id })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Error al eliminar admin');
+        }
+        
+        return await response.json();
     }
 };
 

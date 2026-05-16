@@ -70,8 +70,16 @@ const UI = {
             this.setConnectionStatus('connected', 'Conectado');
         } catch (error) {
             console.error('Error actualizando dashboard:', error);
-            this.setConnectionStatus('error', 'Error de conexión');
-            this.showToast('Error al cargar datos del dashboard', 'error');
+            
+            if (error.message === 'SESION_EXPIRADA') {
+                this.setConnectionStatus('error', 'Sesión expirada');
+                UI.showToast('Tu sesión ha expirado. Por favor, logueate de nuevo.', 'error');
+                this.abrirLogin();
+                this.actualizarUIAuth(null);
+            } else {
+                this.setConnectionStatus('error', 'Error de conexión');
+                UI.showToast('Error al cargar datos del dashboard', 'error');
+            }
         }
     },
 
@@ -154,7 +162,7 @@ const UI = {
 
         } catch (error) {
             console.error('Error cargando selects:', error);
-            this.showToast('Error al cargar opciones', 'error');
+            UI.showToast('Error al cargar opciones', 'error');
         }
     },
 
@@ -189,7 +197,7 @@ const UI = {
             return resultados;
         } catch (error) {
             console.error('Error en búsqueda:', error);
-            this.showToast('Error al realizar la búsqueda', 'error');
+            UI.showToast('Error al realizar la búsqueda', 'error');
             return [];
         }
     },
@@ -340,7 +348,7 @@ const UI = {
             }
         } catch (error) {
             console.error('Error mostrando detalle:', error);
-            this.showToast('Error al cargar detalles', 'error');
+            UI.showToast('Error al cargar detalles', 'error');
         }
     },
 
@@ -606,7 +614,7 @@ const UI = {
             document.getElementById('export-preview-text').textContent = csv.substring(0, 2000) + (csv.length > 2000 ? '\n...(continúa)' : '');
         } catch (error) {
             console.error('Error generando preview:', error);
-            this.showToast('Error al generar vista previa', 'error');
+            UI.showToast('Error al generar vista previa', 'error');
         }
     },
 
@@ -672,10 +680,10 @@ const UI = {
                 Services.descargarArchivo(json, `ifn_${tipo}_${fecha}.json`, 'application/json');
             }
 
-            this.showToast('Archivo exportado correctamente', 'success');
+            UI.showToast('Archivo exportado correctamente', 'success');
         } catch (error) {
             console.error('Error exportando:', error);
-            this.showToast('Error al exportar', 'error');
+            UI.showToast('Error al exportar', 'error');
         }
     },
 
@@ -697,7 +705,7 @@ const UI = {
         // Click en botón Admin del header
         btnAdminHeader.addEventListener('click', (e) => {
             e.preventDefault();
-            if (supabase.isLoggedIn()) {
+            if (supabase.isLoggedInSync()) {
                 Router.navigate('/admin');
             } else {
                 this.abrirLogin();
@@ -731,7 +739,7 @@ const UI = {
                 const session = await supabase.login(email, password);
                 this.cerrarLogin();
                 this.actualizarUIAuth(session);
-                this.showToast(`Bienvenido, ${session.nombre}`, 'success');
+                UI.showToast(`Bienvenido, ${session.admin.nombre}`, 'success');
                 Router.navigate('/admin');
             } catch (error) {
                 loginError.textContent = error.message;
@@ -740,7 +748,7 @@ const UI = {
         });
 
         // Verificar sesión existente
-        const session = supabase.getSession();
+        const session = supabase.getSessionSync();
         if (session) {
             this.actualizarUIAuth(session);
         }
@@ -766,14 +774,14 @@ const UI = {
         const btnAdmin = document.getElementById('btn-admin-header');
         const btnLogout = document.getElementById('btn-logout-header');
         
-        if (session) {
+        if (session && session.admin) {
             if (btnAdmin) {
                 btnAdmin.innerHTML = `
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                         <circle cx="12" cy="7" r="4"></circle>
                     </svg>
-                    <span>${session.nombre}</span>
+                    <span>${session.admin.nombre || 'Usuario'}</span>
                 `;
                 btnAdmin.onclick = null;
                 btnAdmin.addEventListener('click', (e) => {
@@ -786,13 +794,14 @@ const UI = {
                 btnLogout.classList.remove('hidden');
             }
         } else {
+            // Sin sesión: mostrar botón de login, no modal
             if (btnAdmin) {
                 btnAdmin.innerHTML = `
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3"></circle>
                         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                     </svg>
-                    <span>Admin</span>
+                    <span>Login</span>
                 `;
                 btnAdmin.onclick = null;
                 btnAdmin.addEventListener('click', (e) => {
@@ -807,10 +816,12 @@ const UI = {
         }
     },
 
-    logout() {
+logout() {
         supabase.logout();
-        this.showToast('Sesión cerrada', 'info');
-        window.location.reload();
+        this.actualizarUIAuth(null);
+        this.cerrarLogin();
+        // Siempre redirigir al dashboard
+        window.location.href = '/';
     }
 };
 
@@ -826,7 +837,7 @@ window.debugAuth = function() {
     console.log('=== DEBUG AUTH ===');
     console.log('Botón Admin:', document.getElementById('btn-admin-header'));
     console.log('Modal Login:', document.getElementById('modal-login'));
-    console.log('Sesión:', supabase.getSession());
+    console.log('Sesión:', supabase.getSessionSync());
 };
 
 // Cerrar modal al hacer click en overlay
@@ -913,7 +924,7 @@ const Admin = {
                     break;
                 case 'admins':
                     if (!supabase.isSupremo()) {
-                        this.showToast('No tienes permisos para gestionar admins', 'error');
+                        UI.showToast('No tienes permisos para gestionar admins', 'error');
                         return;
                     }
                     datos = await supabase.getAdmins();
@@ -923,7 +934,7 @@ const Admin = {
             this.renderizar();
         } catch (error) {
             console.error('Error cargando tabla admin:', error);
-            this.showToast('Error al cargar datos', 'error');
+            console.error('Error al cargar datos');
         }
     },
 
@@ -1006,7 +1017,7 @@ const Admin = {
                     <td>${acciones}</td>
                 </tr>`;
             case 'admins':
-                const isPropio = supabase.getSession()?.id === item.id;
+                const isPropio = supabase.getSessionSync()?.admin?.id === item.id;
                 const accionesAdmin = isPropio 
                     ? `<span class="text-muted">No puedes eliminarte a ti mismo</span>`
                     : acciones;
@@ -1054,7 +1065,7 @@ const Admin = {
 
     async mostrarFormularioAdmin() {
         if (!supabase.isSupremo()) {
-            this.showToast('No tienes permisos para crear admins', 'error');
+            UI.showToast('No tienes permisos para crear admins', 'error');
             return;
         }
 
@@ -1103,19 +1114,19 @@ const Admin = {
             const rol = document.getElementById('edit-rol')?.value;
 
             if (!email || !nombre || !password) {
-                this.showToast('Completa todos los campos', 'error');
+                UI.showToast('Completa todos los campos', 'error');
                 return;
             }
 
             await supabase.createAdmin({ email, nombre, password, rol });
             
             this.cerrarModalEditar();
-            this.showToast('Admin creado correctamente', 'success');
+            UI.showToast('Admin creado correctamente', 'success');
             this.tablaActual = 'admins';
             await this.cargarTabla();
         } catch (error) {
             console.error('Error creando admin:', error);
-            this.showToast('Error al crear admin: ' + error.message, 'error');
+            UI.showToast('Error al crear admin: ' + error.message, 'error');
         }
     },
 
@@ -1319,7 +1330,7 @@ const Admin = {
                     break;
                 case 'admins':
                     if (!supabase.isSupremo()) {
-                        this.showToast('No tienes permisos', 'error');
+                        UI.showToast('No tienes permisos', 'error');
                         return;
                     }
                     result = await supabase.updateAdmin(id, datos);
@@ -1327,11 +1338,11 @@ const Admin = {
             }
 
             this.cerrarModalEditar();
-            this.showToast('Registro actualizado correctamente', 'success');
+            UI.showToast('Registro actualizado correctamente', 'success');
             await this.cargarTabla();
         } catch (error) {
             console.error('Error guardando:', error);
-            this.showToast('Error al guardar: ' + error.message, 'error');
+            UI.showToast('Error al guardar: ' + error.message, 'error');
         }
     },
 
@@ -1407,18 +1418,17 @@ const Admin = {
                     break;
                 case 'admins':
                     if (!supabase.isSupremo()) {
-                        this.showToast('No tienes permisos', 'error');
+                        UI.showToast('No tienes permisos', 'error');
                         return;
                     }
                     result = await supabase.deleteAdmin(id);
                     break;
             }
 
-            this.showToast('Registro eliminado correctamente', 'success');
+            UI.showToast('Registro eliminado correctamente', 'success');
             await this.cargarTabla();
         } catch (error) {
-            console.error('Error eliminando:', error);
-            this.showToast('Error al eliminar: ' + error.message, 'error');
+            console.error('Error al eliminar:', error.message);
         }
     },
 

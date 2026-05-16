@@ -41,7 +41,15 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Configurar datepickers con Flatpickr
     configurarDatePickers();
-    
+
+    // Verificar que el SDK cargó correctamente
+    if (window.__SUPABASE_SDK_ERROR__) {
+        console.error('⚠️ El SDK de Supabase falló al cargar. Login no funcionará.');
+        UI.showToast('Error de conexión. Recarga la página.', 'error');
+    } else if (window.__SUPABASE_SDK_READY__) {
+        console.log('✅ SDK de Supabase listo');
+    }
+
     console.log('✅ Aplicación inicializada');
 });
 

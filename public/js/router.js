@@ -75,7 +75,7 @@ const Router = {
         }
 
         // Proteger ruta /admin
-        if (hash === '/admin' && !supabase.isLoggedIn()) {
+        if (hash === '/admin' && !supabase.isLoggedInSync()) {
             console.log('🔒 Ruta /admin protegida - requeriendo login');
             UI.abrirLogin();
             // No navegamos a otro lado, simplemente abrimos el modal

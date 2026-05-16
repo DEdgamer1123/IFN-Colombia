@@ -16,6 +16,20 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+    
+    <!-- Supabase JS SDK - ES Module via esm.sh (resuelve bare imports correctamente) -->
+    <script defer type="module">
+      try {
+        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+        window.createSupabaseClient = createClient;
+        window.__SUPABASE_SDK_READY__ = true;
+        window.dispatchEvent(new CustomEvent('supabase-sdk-ready'));
+        console.log('✅ SDK de Supabase cargado');
+      } catch (err) {
+        console.error('❌ Error cargando SDK de Supabase:', err);
+        window.__SUPABASE_SDK_ERROR__ = true;
+      }
+    </script>
 </head>
 <body>
     <div class="app-container">
@@ -789,10 +803,10 @@
     <!-- Toast Notifications -->
     <div id="toast-container"></div>
 
-    <script src="js/supabaseClient.js"></script>
-    <script src="js/services.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/router.js"></script>
-    <script src="js/app.js"></script>
+    <script defer src="js/supabaseClient.js"></script>
+    <script defer src="js/services.js"></script>
+    <script defer src="js/ui.js"></script>
+    <script defer src="js/router.js"></script>
+    <script defer src="js/app.js"></script>
 </body>
 </html>
