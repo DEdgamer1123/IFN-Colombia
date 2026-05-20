@@ -740,6 +740,10 @@ const UI = {
                 this.cerrarLogin();
                 this.actualizarUIAuth(session);
                 UI.showToast(`Bienvenido, ${session.admin.nombre}`, 'success');
+                if (typeof Realtime !== 'undefined' && !window.__realtimeInitialized) {
+                    window.__realtimeInitialized = true;
+                    Realtime.init(supabase);
+                }
                 Router.navigate('/admin');
             } catch (error) {
                 loginError.textContent = error.message;
@@ -751,9 +755,52 @@ const UI = {
         const session = supabase.getSessionSync();
         if (session) {
             this.actualizarUIAuth(session);
+            const rol = session.admin?.rol || session.admin?.app_metadata?.rol;
+            if (rol === 'admin' || rol === 'supremo') {
+                supabase.iniciarPolling(session.admin.id);
+                if (typeof Realtime !== 'undefined' && window.__SUPABASE_SDK_READY__ && !window.__realtimeInitialized) {
+                    window.__realtimeInitialized = true;
+                    Realtime.init(supabase);
+                }
+            }
         }
 
+        // Visibility change listener para verificar sesión al volver a la pestaña
+        document.removeEventListener('visibilitychange', this._visibilityHandler);
+        this._visibilityHandler = async () => {
+            if (document.visibilityState === 'visible') {
+                const now = Date.now();
+                const lastVisible = window.__lastHiddenTime || 0;
+                const UMBRAL_MS = 5 * 60 * 1000; // 5 minutos
+
+                if (now - lastVisible < UMBRAL_MS) {
+                    window.__lastVisibleTime = now;
+                    return;
+                }
+
+                window.__lastVisibleTime = now;
+
+                const s = supabase.getSessionSync();
+                if (s?.admin?.id) {
+                    const activo = await supabase.verificarUsuarioActivo(s.admin.id);
+                    if (!activo) {
+                        supabase.logoutForzado('ACCOUNT_INVALIDATED');
+                    }
+                }
+            } else {
+                window.__lastHiddenTime = Date.now();
+            }
+        };
+        document.addEventListener('visibilitychange', this._visibilityHandler);
+
         console.log('✅ Auth inicializado correctamente');
+
+        // Verificar si viene de re-login por cambio de rol
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('session') === 'rol_actualizado') {
+            this.showToast('✅ Tu nuevo rol ha sido aplicado. Bienvenido.', 'success', 4000);
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
     },
 
     abrirLogin() {
@@ -793,6 +840,14 @@ const UI = {
             if (btnLogout) {
                 btnLogout.classList.remove('hidden');
             }
+
+            if (typeof Realtime !== 'undefined' && window.__SUPABASE_SDK_READY__ && !window.__realtimeInitialized) {
+                const rol = session.admin?.rol || session.admin?.app_metadata?.rol;
+                if (rol === 'admin' || rol === 'supremo') {
+                    window.__realtimeInitialized = true;
+                    Realtime.init(supabase);
+                }
+            }
         } else {
             // Sin sesión: mostrar botón de login, no modal
             if (btnAdmin) {
@@ -817,12 +872,16 @@ const UI = {
     },
 
 logout() {
+        supabase.detenerPolling();
         supabase.logout();
         this.actualizarUIAuth(null);
         this.cerrarLogin();
-        // Siempre redirigir al dashboard
+        if (typeof Realtime !== 'undefined' && Realtime.cleanup) {
+            Realtime.cleanup();
+        }
+        window.__realtimeInitialized = false;
         window.location.href = '/';
-    }
+    },
 };
 
 // Exportar para uso global
@@ -929,6 +988,13 @@ const Admin = {
                     }
                     datos = await supabase.getAdmins();
                     break;
+                case 'historial':
+                    if (!supabase.isSupremo()) {
+                        UI.showToast('No tienes permisos para ver el historial', 'error');
+                        return;
+                    }
+                    datos = await supabase.getAuditLogs();
+                    break;
             }
             this.datosActuales = datos || [];
             this.renderizar();
@@ -955,7 +1021,8 @@ const Admin = {
             muestras: '<th>ID</th><th>Nombre Común</th><th>Nombre Científico</th><th>Tipo</th><th>Uso</th><th>Código</th><th>Acciones</th>',
             conteos: '<th>ID</th><th>Brigada ID</th><th>Subparcela</th><th>Brinzales</th><th>Latizales</th><th>Fustales</th><th>Acciones</th>',
             inspecciones: '<th>ID</th><th>Conglomerado</th><th>Brigada</th><th>Fecha</th><th>Clima</th><th>Duración</th><th>Acciones</th>',
-            admins: '<th>ID</th><th>Email</th><th>Nombre</th><th>Rol</th><th>Acciones</th>'
+            admins: '<th>ID</th><th>Email</th><th>Nombre</th><th>Rol</th><th>Acciones</th>',
+            historial: '<th>Fecha</th><th>Usuario</th><th>Acción</th><th>Tabla</th><th>Detalle</th>'
         };
         return headers[this.tablaActual] || '';
     },
@@ -1027,6 +1094,32 @@ const Admin = {
                     <td>${item.nombre || '-'}</td>
                     <td><span class="badge ${item.rol === 'supremo' ? 'badge-success' : 'badge-info'}">${item.rol}</span></td>
                     <td>${accionesAdmin}</td>
+                </tr>`;
+            case 'historial':
+                const fecha = item.fecha_creacion ? new Date(item.fecha_creacion).toLocaleString('es-CO') : '-';
+                const accionBadge = item.accion === 'INSERT' ? 'badge-success' : item.accion === 'DELETE' ? 'badge-danger' : 'badge-info';
+                let detalle = '-';
+                if (item.datos_nuevos) {
+                    try {
+                        const datos = JSON.parse(item.datos_nuevos);
+                        detalle = datos.nombre || datos.email || item.registro_id?.substring(0, 8) || '-';
+                    } catch (e) {
+                        detalle = item.registro_id?.substring(0, 8) || '-';
+                    }
+                } else if (item.datos_anteriores) {
+                    try {
+                        const datos = JSON.parse(item.datos_anteriores);
+                        detalle = datos.nombre || datos.email || '-';
+                    } catch (e) {
+                        detalle = '-';
+                    }
+                }
+                return `<tr>
+                    <td>${fecha}</td>
+                    <td>${item.usuario_email || '-'}</td>
+                    <td><span class="badge ${accionBadge}">${item.accion}</span></td>
+                    <td>${item.tabla_afectada || '-'}</td>
+                    <td>${detalle}</td>
                 </tr>`;
             default:
                 return '<tr><td colspan="7">Sin datos</td></tr>';

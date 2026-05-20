@@ -112,12 +112,15 @@ const supabaseClient = {
             throw new Error('Credenciales de Supabase no configuradas');
         }
 
-        // Para GET (SELECT públicos): usar ANON_KEY directamente
+        // Para GET: usar token de usuario si existe (necesario para RLS), sino ANON_KEY
         if (method === 'GET') {
+            const userToken = this.getAccessToken();
+            const authHeader = userToken ? `Bearer ${userToken}` : `Bearer ${key}`;
+
             const headers = {
                 'Content-Type': 'application/json',
                 'apikey': key,
-                'Authorization': `Bearer ${key}`
+                'Authorization': authHeader
             };
 
             const options = {
@@ -127,7 +130,7 @@ const supabaseClient = {
 
             try {
                 const response = await fetch(`${this.url}/rest/v1/${endpoint}`, options);
-                
+
                 if (!response.ok) {
                     const error = await response.json().catch(() => ({ message: `Error ${response.status}` }));
                     throw new Error(error.message || `Error ${response.status}`);
@@ -139,8 +142,6 @@ const supabaseClient = {
                 }
                 return null;
             } catch (error) {
-                // Para GET públicos, no lanzar SESION_EXPIRADA
-                // Simplemente propagar el error
                 throw error;
             }
         }
@@ -694,8 +695,14 @@ const supabaseClient = {
                 throw new Error('Error en la autenticación');
             }
 
+            // 🔴 OBTENER USUARIO FRESCO (getUser() siempre consulta al servidor)
+            const { data: userData, error: userError } = await this.supabaseAuth.auth.getUser();
+            if (userError || !userData?.user) {
+                throw new Error('Error obteniendo datos de usuario');
+            }
+            
             const authData = data;
-            const user = authData.user;
+            const user = userData.user; // ← Usar user fresco de getUser()
             
             // Verificar que el usuario tiene un rol asignado
             const appMeta = user.app_metadata || {};
@@ -725,6 +732,28 @@ const supabaseClient = {
                 }
             } catch (e) {
                 console.log('Profile not found, using metadata name');
+            }
+
+            // 🔴 LIMPIAR invalidada_hasta al hacer login exitoso
+            // (el usuario se autenticó correctamente, la marca ya no aplica)
+            try {
+                await fetch(
+                    `${this.url}/rest/v1/profiles?id=eq.${user.id}`,
+                    {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'apikey': this.key,
+                            'Authorization': `Bearer ${authData.session.access_token}`,
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify({ 
+                            invalidada_hasta: null 
+                        })
+                    }
+                );
+            } catch (e) {
+                console.warn('⚠️ No se pudo limpiar invalidada_hasta:', e.message);
             }
 
             // Guardar sesión completa
@@ -883,8 +912,7 @@ const supabaseClient = {
     async getAdmins() {
         const token = this.getAccessToken();
         if (!token) throw new Error('No autenticado');
-        
-        // Llamar a Edge Function para obtener admins
+
         const response = await fetch(`${this.url}/functions/v1/get-admins`, {
             method: 'GET',
             headers: {
@@ -892,11 +920,13 @@ const supabaseClient = {
                 'Authorization': `Bearer ${token}`
             }
         });
-        
+
         if (!response.ok) {
-            throw new Error('Error al obtener admins');
+            const errorText = await response.text();
+            console.error('❌ getAdmins error:', response.status, errorText);
+            throw new Error('Error al obtener admins: ' + response.status);
         }
-        
+
         return await response.json();
     },
 
@@ -949,7 +979,8 @@ const supabaseClient = {
                 userId: id,
                 email: data.email,
                 nombre: data.nombre,
-                rol: data.rol
+                rol: data.rol,
+                password: data.password || undefined
             })
         });
         
@@ -984,8 +1015,200 @@ const supabaseClient = {
         }
         
         return await response.json();
+    },
+
+    async getAuditLogs() {
+        const token = this.getAccessToken();
+        if (!token) throw new Error('No autenticado');
+
+        const response = await fetch(`${this.url}/functions/v1/log-audit`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Error al obtener historial de auditoría');
+        }
+
+        return await response.json();
+    },
+
+    // ==================== REFRESCO DE SESIÓN EN TIEMPO REAL ====================
+
+    actualizarSesionDesdePerfil(profileData) {
+        try {
+            const session = this.getSessionSync();
+            if (!session?.admin) return;
+
+            const rolAnterior = session.admin.rol;
+            const nuevoRol = profileData.rol || rolAnterior;
+            const rolCambio = rolAnterior !== nuevoRol;
+
+            const updatedAdmin = {
+                ...session.admin,
+                nombre: profileData.nombre || session.admin.nombre,
+                rol: nuevoRol,
+                es_supremo: nuevoRol === 'supremo',
+                app_metadata: {
+                    ...session.admin.app_metadata,
+                    rol: nuevoRol
+                }
+            };
+
+            const updatedSession = { ...session, admin: updatedAdmin };
+            localStorage.setItem('supabaseSession', JSON.stringify(updatedSession));
+            localStorage.setItem('adminSession', JSON.stringify(updatedAdmin));
+
+            if (window.UI?.actualizarUIAuth) {
+                window.UI.actualizarUIAuth(updatedSession);
+            }
+
+            // 🔴 SI CAMBIÓ EL ROL: forzar re-login para obtener JWT actualizado
+            if (rolCambio) {
+                console.log('🔄 Rol actualizado: cerrando sesión para aplicar cambios');
+                if (window.UI?.showToast) {
+                    window.UI.showToast('Tu rol ha sido actualizado. Iniciando sesión nuevamente...', 'info', 3000);
+                }
+                setTimeout(() => {
+                    this.detenerPolling();
+                    window.__realtimeInitialized = false;
+                    localStorage.removeItem('supabaseSession');
+                    localStorage.removeItem('adminSession');
+                    window.location.replace('/?session=rol_actualizado');
+                }, 2000);
+                return;
+            }
+
+            console.log(`✅ Sesión actualizada en tiempo real: ${updatedAdmin.nombre} (${updatedAdmin.rol})`);
+        } catch (e) {
+            console.warn('⚠️ Error actualizando sesión:', e.message);
+        }
+    },
+
+    // ==================== SEGURIDAD: LOGOUT FORZADO ====================
+
+    logoutForzado(reason = 'SESSION_INVALIDATED') {
+        console.warn(JSON.stringify({
+            level: 'warn',
+            event: 'FORCE_LOGOUT',
+            reason,
+            timestamp: new Date().toISOString(),
+            path: window.location.pathname
+        }));
+
+        this.detenerPolling();
+        window.__realtimeInitialized = false;
+
+        const keysToRemove = Object.keys(localStorage).filter(k => 
+            k.startsWith('sb-') || k.includes('supabase')
+        );
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+
+        const messages = {
+            'ACCOUNT_DELETED': 'Tu cuenta ha sido eliminada.',
+            'ACCOUNT_INVALIDATED': 'Tu sesión fue invalidada por un administrador.',
+            'SESSION_REVOKED': 'Tu sesión fue cerrada por un administrador.',
+            'default': 'Tu sesión ha sido invalidada. Inicia sesión nuevamente.'
+        };
+
+        if (window.UI?.showToast) {
+            window.UI.showToast(messages[reason] || messages.default, 'error', 5000);
+        }
+
+        try {
+            this.supabaseAuth?.auth?.signOut({ scope: 'local' });
+        } catch (e) {
+            console.warn('⚠️ Error en signOut:', e);
+        }
+
+        setTimeout(() => {
+            window.location.replace('/?session=invalidated');
+        }, 2500);
+    },
+
+    // ==================== SEGURIDAD: VERIFICACION DE USUARIO ACTIVO ====================
+
+    _pollingTimer: null,
+    _lastCheck: 0,
+    _lastValid: undefined,
+
+async verificarUsuarioActivo(userId) {
+        if (!userId) return false;
+
+        const now = Date.now();
+        if (now - this._lastCheck < 10000 && this._lastValid !== undefined) {
+            return this._lastValid;
+        }
+
+        try {
+            const result = await this.request(
+                `profiles?id=eq.${userId}&select=eliminado,invalidada_hasta`,
+                'GET'
+            );
+
+            const profile = Array.isArray(result) ? result[0] : result;
+
+            if (!profile) {
+                console.warn(`⚠️ Perfil no encontrado para usuario: ${userId}`);
+                this._lastValid = false;
+                this._lastCheck = now;
+                return false;
+            }
+
+            const invalidadaHasta = profile.invalidada_hasta
+                ? new Date(profile.invalidada_hasta)
+                : null;
+
+            const fechaInvalida = invalidadaHasta && !isNaN(invalidadaHasta.getTime());
+
+            const estaEliminado = profile.eliminado === true;
+            const estaVencido = fechaInvalida && invalidadaHasta < new Date();
+
+            const activo = !estaEliminado && !estaVencido;
+
+            console.log(`📋 Verificación ${userId?.substring(0,8)}: eliminado=${estaEliminado}, vencido=${estaVencido} → activo=${activo}`);
+
+            this._lastValid = activo;
+            this._lastCheck = now;
+            return activo;
+        } catch (e) {
+            console.warn('⚠️ Error verificando usuario (fallback seguro):', e.message);
+            this._lastCheck = now;
+            return true;
+        }
+    },
+
+    iniciarPolling(userId) {
+        this.detenerPolling();
+        this._pollingTimer = setInterval(async () => {
+            const session = this.getSessionSync();
+            if (!session?.admin?.id) {
+                this.detenerPolling();
+                return;
+            }
+
+            const activo = await this.verificarUsuarioActivo(userId);
+            if (!activo) {
+                this.detenerPolling();
+                this.logoutForzado('ACCOUNT_INVALIDATED');
+            }
+        }, 15000);
+    },
+
+    detenerPolling() {
+        if (this._pollingTimer) {
+            clearInterval(this._pollingTimer);
+            this._pollingTimer = null;
+        }
     }
 };
 
 // Exportar para uso global
 window.supabase = supabaseClient;
+Object.defineProperty(window, 'supabaseAuth', {
+    get: () => supabaseClient.supabaseAuth,
+    configurable: true
+});

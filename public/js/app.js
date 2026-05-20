@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inicializar router
     Router.init();
     
-    // Inicializar sistema de autenticación
+// Inicializar sistema de autenticación
     UI.initAuth();
     
     // Configurar menú responsive
