@@ -5,7 +5,7 @@
   "main": "public/js/app.js",
   "scripts": {
     "dev": "vercel dev",
-    "build": "vercel build",
+    "build": "echo 'Static site - no build required'",
     "start": "vercel start"
   },
   "keywords": [
