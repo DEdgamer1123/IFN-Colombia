@@ -5,6 +5,9 @@
 # Configuración local (contiene credenciales)
 public/config.js
 
+# Archivos generados durante build
+public/env.js
+
 # Archivos de entorno
 .env
 .env.local

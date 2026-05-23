@@ -4,9 +4,9 @@
   "description": "Sistema de Información del Inventario Forestal Nacional - IDEAM",
   "main": "public/js/app.js",
   "scripts": {
-    "dev": "vercel dev",
-    "build": "echo 'Static site - no build required'",
-    "start": "vercel start"
+    "dev": "node scripts/generate-env.js && live-server public --port=8000",
+    "build": "node scripts/generate-env.js && echo 'Build complete'",
+    "build:env": "node scripts/generate-env.js"
   },
   "keywords": [
     "inventario-forestal",
@@ -17,6 +17,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "dotenv": "^16.3.1",
     "vercel": "^32.0.0"
   }
 }

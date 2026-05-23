@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Verificar que las credenciales estén configuradas
     if (!window.__ENV__?.VITE_SUPABASE_URL && !window.__ENV__?.VITE_SUPABASE_ANON_KEY) {
-        console.warn('⚠️ Credenciales no configuradas. Para desarrollo local, crea public/config.js');
+        console.warn('⚠️ Credenciales no configuradas. Para desarrollo local, crea .env en la raíz');
     }
     
     // Inicializar router

@@ -6,17 +6,19 @@
  * 
  * CONFIGURACIÓN DE SEGURIDAD:
  * - Las credenciales se configuran vía Variables de Entorno
- * - En DESARROLLO: crea archivo public/config.js con tus credenciales
- * - En PRODUCCIÓN (Vercel): configura en Settings → Environment Variables
+ * - En DESARROLLO LOCAL: archivo .env en la raíz del proyecto
+ * - En PRODUCCIÓN (Vercel): Environment Variables en Settings
+ * 
+ * IMPORTANTE: NUNCA expongas SUPABASE_SERVICE_ROLE_KEY en el frontend
  */
 
 // Función para obtener variables de entorno (soporta Vercel y desarrollo local)
 const getEnv = (key, fallback = '') => {
-    // 1. 우선: window.__ENV__ (inyectado por Vercel)
+    // 1. window.__ENV__ (generado durante build desde .env o Environment Variables)
     if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__[key]) {
         return window.__ENV__[key];
     }
-    // 2. Fallback: variables globales (desarrollo local con config.js)
+    // 2. Fallback: variables globales (para compatibilidad con desarrollo local)
     if (typeof window !== 'undefined' && window[key]) {
         return window[key];
     }
@@ -664,7 +666,7 @@ const supabaseClient = {
     async login(email, password) {
         try {
             if (!this.url || !this.key) {
-                throw new Error('Credenciales de Supabase no configuradas. Verifica config.js');
+                throw new Error('Credenciales de Supabase no configuradas. Verifica las variables de entorno');
             }
 
             // Asegurar que el SDK esté listo antes de intentar login
