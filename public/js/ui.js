@@ -41,6 +41,45 @@ const UI = {
         }, duracion);
     },
 
+    // ==================== MODAL DE CONFIRMACION ====================
+
+    confirmModal(titulo, mensaje, tipo = 'warning') {
+        return new Promise((resolve) => {
+            const modal = document.getElementById('modal-confirm');
+            const tituloEl = document.getElementById('modal-confirm-titulo');
+            const mensajeEl = document.getElementById('modal-confirm-mensaje');
+            const iconoEl = document.getElementById('modal-confirm-icono');
+            const btnAceptar = document.getElementById('modal-confirm-aceptar');
+            const btnCancelar = document.getElementById('modal-confirm-cancelar');
+
+            tituloEl.textContent = titulo;
+            mensajeEl.textContent = mensaje;
+            iconoEl.textContent = tipo === 'warning' ? '⚠️' : tipo === 'danger' ? '❌' : 'ℹ️';
+            btnAceptar.textContent = tipo === 'warning' ? 'Confirmar' : 'Aceptar';
+            btnAceptar.className = tipo === 'danger' ? 'btn btn-danger' : 'btn btn-primary';
+
+            modal.classList.remove('hidden');
+
+            const cleanup = () => {
+                modal.classList.add('hidden');
+                btnAceptar.removeEventListener('click', handleAccept);
+                btnCancelar.removeEventListener('click', handleCancel);
+                overlay.removeEventListener('click', handleCancel);
+            };
+
+            const handleAccept = () => { cleanup(); resolve(true); };
+            const handleCancel = () => { cleanup(); resolve(false); };
+
+            const overlay = modal.querySelector('.modal-overlay');
+            const btnCerrar = document.getElementById('modal-confirm-cerrar');
+
+            btnAceptar.addEventListener('click', handleAccept);
+            btnCancelar.addEventListener('click', handleCancel);
+            overlay.addEventListener('click', handleCancel);
+            btnCerrar.addEventListener('click', handleCancel);
+        });
+    },
+
     // ==================== DASHBOARD ====================
     
     async actualizarDashboard() {
@@ -940,6 +979,8 @@ const Admin = {
         document.getElementById('btn-admin-nuevo')?.addEventListener('click', async () => {
             if (this.tablaActual === 'admins') {
                 await this.mostrarFormularioAdmin();
+            } else {
+                await this.mostrarFormularioNuevo();
             }
         });
 
@@ -1147,9 +1188,12 @@ const Admin = {
         const body = document.getElementById('modal-editar-body');
 
         titulo.textContent = `Editar ${this.tablaActual}`;
-        body.innerHTML = this.generarFormularioEdicion(item);
+        body.innerHTML = this.generarFormularioEdicion(item, false);
         
         modal.classList.remove('hidden');
+
+        await this.cargarOpcionesFormulario(item);
+        this.inicializarDatepickers();
 
         document.getElementById('btn-guardar-edicion')?.addEventListener('click', () => {
             this.guardarEdicion(id);
@@ -1199,6 +1243,96 @@ const Admin = {
         });
     },
 
+    async mostrarFormularioNuevo() {
+        const modal = document.getElementById('modal-editar');
+        const titulo = document.getElementById('modal-editar-titulo');
+        const body = document.getElementById('modal-editar-body');
+
+        titulo.textContent = `Nuevo ${this.tablaActual}`;
+        body.innerHTML = this.generarFormularioEdicion(null, true);
+        
+        modal.classList.remove('hidden');
+
+        await this.cargarOpcionesFormulario();
+        this.inicializarDatepickers();
+
+        document.getElementById('btn-guardar-edicion')?.addEventListener('click', () => {
+            this.crearNuevo();
+        });
+    },
+
+    async cargarOpcionesFormulario(item = null) {
+        try {
+            switch (this.tablaActual) {
+                case 'brigadas':
+                    const congOptions = await supabase.getConglomerados();
+                    const congSelect = document.getElementById('edit-conglomerado_id');
+                    if (congSelect && congOptions) {
+                        congOptions.forEach(c => {
+                            const selected = item?.id_conglomerado === c.id ? 'selected' : '';
+                            congSelect.innerHTML += `<option value="${c.id}" ${selected}>${c.codigo} - ${c.departamento}</option>`;
+                        });
+                    }
+                    break;
+                case 'muestras':
+                    const brigOptions = await supabase.getBrigadas();
+                    const brigSelect = document.getElementById('edit-brigada_id');
+                    if (brigSelect && brigOptions) {
+                        brigOptions.forEach(b => {
+                            const selected = item?.id_brigada === b.id ? 'selected' : '';
+                            brigSelect.innerHTML += `<option value="${b.id}" ${selected}>${b.nombre_lider} - ${b.region}</option>`;
+                        });
+                    }
+                    break;
+                case 'conteos':
+                    const brigOptionsCT = await supabase.getBrigadas();
+                    const brigSelectCT = document.getElementById('edit-brigada_id');
+                    if (brigSelectCT && brigOptionsCT) {
+                        brigOptionsCT.forEach(b => {
+                            const selected = item?.id_brigada === b.id ? 'selected' : '';
+                            brigSelectCT.innerHTML += `<option value="${b.id}" ${selected}>${b.nombre_lider} - ${b.region}</option>`;
+                        });
+                    }
+                    break;
+                case 'inspecciones':
+                    const congOptionsINS = await supabase.getConglomerados();
+                    const congSelectINS = document.getElementById('edit-conglomerado_id');
+                    if (congSelectINS && congOptionsINS) {
+                        congOptionsINS.forEach(c => {
+                            const selected = item?.id_conglomerado === c.id ? 'selected' : '';
+                            congSelectINS.innerHTML += `<option value="${c.id}" ${selected}>${c.codigo} - ${c.departamento}</option>`;
+                        });
+                    }
+                    const brigOptionsINS = await supabase.getBrigadas();
+                    const brigSelectINS = document.getElementById('edit-brigada_id');
+                    if (brigSelectINS && brigOptionsINS) {
+                        brigOptionsINS.forEach(b => {
+                            const selected = item?.id_brigada === b.id ? 'selected' : '';
+                            brigSelectINS.innerHTML += `<option value="${b.id}" ${selected}>${b.nombre_lider} - ${b.region}</option>`;
+                        });
+                    }
+                    break;
+            }
+        } catch (error) {
+            console.error('Error cargando opciones de formulario:', error);
+        }
+    },
+
+    inicializarDatepickers() {
+        const datepickers = document.querySelectorAll('.datepicker');
+        datepickers.forEach(input => {
+            if (!input._flatpickr) {
+                flatpickr(input, {
+                    dateFormat: 'Y-m-d',
+                    locale: 'es',
+                    theme: 'dark',
+                    allowInput: false,
+                    closeOnSelect: true
+                });
+            }
+        });
+    },
+
     async crearAdmin() {
         try {
             const email = document.getElementById('edit-email')?.value;
@@ -1223,141 +1357,226 @@ const Admin = {
         }
     },
 
-    generarFormularioEdicion(item) {
+    generarFormularioEdicion(item, isNew = false) {
         let campos = '';
         
         switch (this.tablaActual) {
             case 'conglomerados':
                 campos = `
-                    <div class="form-group">
-                        <label>Código</label>
-                        <input type="number" id="edit-codigo" value="${item.codigo || ''}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Código</label>
+                            <input type="number" id="edit-codigo" value="${isNew ? '' : item.codigo || ''}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Región</label>
+                            <select id="edit-region" required>
+                                <option value="">Seleccionar...</option>
+                                <option value="Andina" ${item?.region === 'Andina' ? 'selected' : ''}>Andina</option>
+                                <option value="Caribe" ${item?.region === 'Caribe' ? 'selected' : ''}>Caribe</option>
+                                <option value="Pacífico" ${item?.region === 'Pacífico' ? 'selected' : ''}>Pacífico</option>
+                                <option value="Amazonía" ${item?.region === 'Amazonía' ? 'selected' : ''}>Amazonía</option>
+                                <option value="Orinoquía" ${item?.region === 'Orinoquía' ? 'selected' : ''}>Orinoquía</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Departamento</label>
-                        <input type="text" id="edit-departamento" value="${item.departamento || ''}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Departamento</label>
+                            <input type="text" id="edit-departamento" value="${isNew ? '' : item.departamento || ''}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Municipio</label>
+                            <input type="text" id="edit-municipio" value="${isNew ? '' : item.municipio || ''}" required>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Municipio</label>
-                        <input type="text" id="edit-municipio" value="${item.municipio || ''}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Latitud</label>
+                            <input type="number" step="0.0001" id="edit-latitud" value="${isNew ? '' : item.latitud || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>Longitud</label>
+                            <input type="number" step="0.0001" id="edit-longitud" value="${isNew ? '' : item.longitud || ''}">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Región</label>
-                        <select id="edit-region">
-                            <option value="Andina" ${item.region === 'Andina' ? 'selected' : ''}>Andina</option>
-                            <option value="Caribe" ${item.region === 'Caribe' ? 'selected' : ''}>Caribe</option>
-                            <option value="Pacífico" ${item.region === 'Pacífico' ? 'selected' : ''}>Pacífico</option>
-                            <option value="Amazonía" ${item.region === 'Amazonía' ? 'selected' : ''}>Amazonía</option>
-                            <option value="Orinoquía" ${item.region === 'Orinoquía' ? 'selected' : ''}>Orinoquía</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Estado</label>
-                        <select id="edit-estado">
-                            <option value="PENDIENTE" ${item.estado === 'PENDIENTE' ? 'selected' : ''}>Pendiente</option>
-                            <option value="EN_PROGRESO" ${item.estado === 'EN_PROGRESO' ? 'selected' : ''}>En Progreso</option>
-                            <option value="COMPLETADO" ${item.estado === 'COMPLETADO' ? 'selected' : ''}>Completado</option>
-                        </select>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Estado</label>
+                            <select id="edit-estado" required>
+                                <option value="PENDIENTE" ${item?.estado === 'PENDIENTE' ? 'selected' : ''}>Pendiente</option>
+                                <option value="EN_PROGRESO" ${item?.estado === 'EN_PROGRESO' ? 'selected' : ''}>En Progreso</option>
+                                <option value="COMPLETADO" ${item?.estado === 'COMPLETADO' ? 'selected' : ''}>Completado</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha de Asignación</label>
+                            <input type="text" id="edit-fecha_asignacion" class="datepicker" value="${isNew ? '' : item.fecha_asignacion || ''}">
+                        </div>
                     </div>
                 `;
                 break;
             case 'brigadas':
                 campos = `
                     <div class="form-group">
-                        <label>Nombre del Líder</label>
-                        <input type="text" id="edit-nombre_lider" value="${item.nombre_lider || ''}">
+                        <label>Conglomerado</label>
+                        <select id="edit-conglomerado_id" required>
+                            <option value="">Seleccionar conglomerado...</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nombre del Líder</label>
+                            <input type="text" id="edit-nombre_lider" value="${isNew ? '' : item.nombre_lider || ''}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Región</label>
+                            <select id="edit-region" required>
+                                <option value="">Seleccionar...</option>
+                                <option value="Andina" ${item?.region === 'Andina' ? 'selected' : ''}>Andina</option>
+                                <option value="Caribe" ${item?.region === 'Caribe' ? 'selected' : ''}>Caribe</option>
+                                <option value="Pacífico" ${item?.region === 'Pacífico' ? 'selected' : ''}>Pacífico</option>
+                                <option value="Amazonía" ${item?.region === 'Amazonía' ? 'selected' : ''}>Amazonía</option>
+                                <option value="Orinoquía" ${item?.region === 'Orinoquía' ? 'selected' : ''}>Orinoquía</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>Integrantes (separados por coma)</label>
-                        <input type="text" id="edit-integrantes" value="${item.integrantes?.join(', ') || ''}">
+                        <input type="text" id="edit-integrantes" value="${isNew ? '' : (item.integrantes?.join(', ') || '')}">
                     </div>
-                    <div class="form-group">
-                        <label>Región</label>
-                        <select id="edit-region">
-                            <option value="Andina" ${item.region === 'Andina' ? 'selected' : ''}>Andina</option>
-                            <option value="Caribe" ${item.region === 'Caribe' ? 'selected' : ''}>Caribe</option>
-                            <option value="Pacífico" ${item.region === 'Pacífico' ? 'selected' : ''}>Pacífico</option>
-                            <option value="Amazonía" ${item.region === 'Amazonía' ? 'selected' : ''}>Amazonía</option>
-                            <option value="Orinoquía" ${item.region === 'Orinoquía' ? 'selected' : ''}>Orinoquía</option>
-                        </select>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Fecha Inicio</label>
+                            <input type="text" id="edit-fecha_inicio" class="datepicker" value="${isNew ? '' : item.fecha_inicio || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha Fin</label>
+                            <input type="text" id="edit-fecha_fin" class="datepicker" value="${isNew ? '' : item.fecha_fin || ''}">
+                        </div>
                     </div>
                 `;
                 break;
             case 'muestras':
                 campos = `
                     <div class="form-group">
-                        <label>Nombre Común</label>
-                        <input type="text" id="edit-nombre_comun" value="${item.nombre_comun || ''}">
-                    </div>
-                    <div class="form-group">
-                        <label>Nombre Científico</label>
-                        <input type="text" id="edit-nombre_cientifico" value="${item.nombre_cientifico || ''}">
-                    </div>
-                    <div class="form-group">
-                        <label>Familia</label>
-                        <input type="text" id="edit-familia" value="${item.familia || ''}">
-                    </div>
-                    <div class="form-group">
-                        <label>Tipo de Árbol</label>
-                        <select id="edit-tipo_arbol">
-                            <option value="BRINZAL" ${item.tipo_arbol === 'BRINZAL' ? 'selected' : ''}>Brinzal</option>
-                            <option value="LATIZAL" ${item.tipo_arbol === 'LATIZAL' ? 'selected' : ''}>Latizal</option>
-                            <option value="FUSTAL" ${item.tipo_arbol === 'FUSTAL' ? 'selected' : ''}>Fustal</option>
+                        <label>Brigada</label>
+                        <select id="edit-brigada_id" required>
+                            <option value="">Seleccionar brigada...</option>
                         </select>
                     </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Código de Identificación</label>
+                            <input type="text" id="edit-codigo" value="${isNew ? '' : item.codigo || ''}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Estado de Clasificación</label>
+                            <select id="edit-estado" required>
+                                <option value="PENDIENTE" ${item?.estado === 'PENDIENTE' ? 'selected' : ''}>Pendiente</option>
+                                <option value="IDENTIFICADO" ${item?.estado === 'IDENTIFICADO' ? 'selected' : ''}>Identificado</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nombre Común</label>
+                            <input type="text" id="edit-nombre_comun" value="${isNew ? '' : item.nombre_comun || ''}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo de Árbol</label>
+                            <select id="edit-tipo_arbol" required>
+                                <option value="">Seleccionar...</option>
+                                <option value="BRINZAL" ${item?.tipo_arbol === 'BRINZAL' ? 'selected' : ''}>Brinzal (DAP < 10 cm)</option>
+                                <option value="LATIZAL" ${item?.tipo_arbol === 'LATIZAL' ? 'selected' : ''}>Latizal (DAP 10-30 cm)</option>
+                                <option value="FUSTAL" ${item?.tipo_arbol === 'FUSTAL' ? 'selected' : ''}>Fustal (DAP > 30 cm)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Uso</label>
+                            <select id="edit-uso" required>
+                                <option value="">Seleccionar...</option>
+                                <option value="MADERABLE" ${item?.uso === 'MADERABLE' ? 'selected' : ''}>Maderable</option>
+                                <option value="MEDICINAL" ${item?.uso === 'MEDICINAL' ? 'selected' : ''}>Medicinal</option>
+                                <option value="ALIMENTICIO" ${item?.uso === 'ALIMENTICIO' ? 'selected' : ''}>Alimenticio</option>
+                                <option value="ORNAMENTAL" ${item?.uso === 'ORNAMENTAL' ? 'selected' : ''}>Ornamental</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Familia Botánica (opcional)</label>
+                            <input type="text" id="edit-familia" value="${isNew ? '' : item.familia || ''}">
+                        </div>
+                    </div>
                     <div class="form-group">
-                        <label>Uso</label>
-                        <select id="edit-uso">
-                            <option value="MADERABLE" ${item.uso === 'MADERABLE' ? 'selected' : ''}>Maderable</option>
-                            <option value="MEDICINAL" ${item.uso === 'MEDICINAL' ? 'selected' : ''}>Medicinal</option>
-                            <option value="ALIMENTICIO" ${item.uso === 'ALIMENTICIO' ? 'selected' : ''}>Alimenticio</option>
-                            <option value="ORNAMENTAL" ${item.uso === 'ORNAMENTAL' ? 'selected' : ''}>Ornamental</option>
-                        </select>
+                        <label>Nombre Científico (opcional)</label>
+                        <input type="text" id="edit-nombre_cientifico" value="${isNew ? '' : item.nombre_cientifico || ''}">
                     </div>
                 `;
                 break;
             case 'conteos':
                 campos = `
                     <div class="form-group">
+                        <label>Brigada</label>
+                        <select id="edit-brigada_id" required>
+                            <option value="">Seleccionar brigada...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label>Subparcela</label>
-                        <input type="number" id="edit-subparcela" value="${item.subparcela || ''}">
+                        <input type="number" id="edit-subparcela" min="1" max="5" value="${isNew ? '' : item.subparcela || ''}" required>
                     </div>
-                    <div class="form-group">
-                        <label>Brinzales</label>
-                        <input type="number" id="edit-brinzales" value="${item.brinzales || 0}">
-                    </div>
-                    <div class="form-group">
-                        <label>Latizales</label>
-                        <input type="number" id="edit-latizales" value="${item.latizales || 0}">
-                    </div>
-                    <div class="form-group">
-                        <label>Fustales</label>
-                        <input type="number" id="edit-fustales" value="${item.fustales || 0}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Brinzales (DAP < 10 cm)</label>
+                            <input type="number" id="edit-brinzales" min="0" value="${isNew ? '0' : item.brinzales ?? '0'}">
+                        </div>
+                        <div class="form-group">
+                            <label>Latizales (DAP 10-30 cm)</label>
+                            <input type="number" id="edit-latizales" min="0" value="${isNew ? '0' : item.latizales ?? '0'}">
+                        </div>
+                        <div class="form-group">
+                            <label>Fustales (DAP > 30 cm)</label>
+                            <input type="number" id="edit-fustales" min="0" value="${isNew ? '0' : item.fustales ?? '0'}">
+                        </div>
                     </div>
                 `;
                 break;
             case 'inspecciones':
                 campos = `
                     <div class="form-group">
+                        <label>Conglomerado</label>
+                        <select id="edit-conglomerado_id" required>
+                            <option value="">Seleccionar conglomerado...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Brigada</label>
+                        <select id="edit-brigada_id" required>
+                            <option value="">Seleccionar brigada...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label>Fecha</label>
-                        <input type="date" id="edit-fecha" value="${item.fecha || ''}">
+                        <input type="text" id="edit-fecha" class="datepicker" value="${isNew ? '' : item.fecha || ''}">
                     </div>
                     <div class="form-group">
                         <label>Clima</label>
                         <select id="edit-clima">
-                            <option value="SOLEADO" ${item.clima === 'SOLEADO' ? 'selected' : ''}>Soleado</option>
-                            <option value="NUBLADO" ${item.clima === 'NUBLADO' ? 'selected' : ''}>Nublado</option>
-                            <option value="LLUVIOSO" ${item.clima === 'LLUVIOSO' ? 'selected' : ''}>Lluvioso</option>
-                            <option value="PARCIAL" ${item.clima === 'PARCIAL' ? 'selected' : ''}>Parcial</option>
+                            <option value="SOLEADO" ${item?.clima === 'SOLEADO' ? 'selected' : ''}>Soleado</option>
+                            <option value="NUBLADO" ${item?.clima === 'NUBLADO' ? 'selected' : ''}>Nublado</option>
+                            <option value="LLUVIOSO" ${item?.clima === 'LLUVIOSO' ? 'selected' : ''}>Lluvioso</option>
+                            <option value="PARCIAL" ${item?.clima === 'PARCIAL' ? 'selected' : ''}>Parcial</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Duración (horas)</label>
-                        <input type="number" id="edit-duracion_horas" value="${item.duracion_horas || ''}">
+                        <input type="number" id="edit-duracion_horas" value="${isNew ? '' : item.duracion_horas || ''}">
                     </div>
                     <div class="form-group">
                         <label>Observaciones</label>
-                        <textarea id="edit-observaciones">${item.observaciones || ''}</textarea>
+                        <textarea id="edit-observaciones">${isNew ? '' : item.observaciones || ''}</textarea>
                     </div>
                 `;
                 break;
@@ -1368,11 +1587,11 @@ const Admin = {
                 campos = `
                     <div class="form-group">
                         <label>Email</label>
-                        <input type="email" id="edit-email" value="${item.email || ''}">
+                        <input type="email" id="edit-email" value="${isNew ? '' : item.email || ''}">
                     </div>
                     <div class="form-group">
                         <label>Nombre</label>
-                        <input type="text" id="edit-nombre" value="${item.nombre || ''}">
+                        <input type="text" id="edit-nombre" value="${isNew ? '' : item.nombre || ''}">
                     </div>
                     <div class="form-group">
                         <label>Nueva Contraseña (dejar en blanco para mantener)</label>
@@ -1391,7 +1610,7 @@ const Admin = {
 
         return campos + `
             <div class="form-actions">
-                <button class="btn btn-primary" id="btn-guardar-edicion">Guardar Cambios</button>
+                <button class="btn btn-primary" id="btn-guardar-edicion">${isNew ? 'Crear' : 'Guardar Cambios'}</button>
                 <button class="btn btn-secondary" onclick="Admin.cerrarModalEditar()">Cancelar</button>
             </div>
         `;
@@ -1439,6 +1658,41 @@ const Admin = {
         }
     },
 
+    async crearNuevo() {
+        try {
+            const datos = this.recogerDatosFormulario();
+            
+            let result;
+            switch (this.tablaActual) {
+                case 'conglomerados':
+                    result = await supabase.createConglomerado(datos);
+                    break;
+                case 'brigadas':
+                    if (datos.integrantes && typeof datos.integrantes === 'string') {
+                        datos.integrantes = datos.integrantes.split(',').map(s => s.trim()).filter(s => s);
+                    }
+                    result = await supabase.createBrigada(datos);
+                    break;
+                case 'muestras':
+                    result = await supabase.createMuestra(datos);
+                    break;
+                case 'conteos':
+                    result = await supabase.createConteo(datos);
+                    break;
+                case 'inspecciones':
+                    result = await supabase.createInspeccion(datos);
+                    break;
+            }
+
+            this.cerrarModalEditar();
+            UI.showToast('Registro creado correctamente', 'success');
+            await this.cargarTabla();
+        } catch (error) {
+            console.error('Error creando:', error);
+            UI.showToast('Error al crear: ' + error.message, 'error');
+        }
+    },
+
     recogerDatosFormulario() {
         const datos = {};
         
@@ -1447,32 +1701,47 @@ const Admin = {
                 datos.codigo = parseInt(document.getElementById('edit-codigo')?.value);
                 datos.departamento = document.getElementById('edit-departamento')?.value;
                 datos.municipio = document.getElementById('edit-municipio')?.value;
+                datos.latitud = parseFloat(document.getElementById('edit-latitud')?.value) || null;
+                datos.longitud = parseFloat(document.getElementById('edit-longitud')?.value) || null;
                 datos.region = document.getElementById('edit-region')?.value;
                 datos.estado = document.getElementById('edit-estado')?.value;
+                datos.fecha_asignacion = document.getElementById('edit-fecha_asignacion')?.value || null;
                 break;
             case 'brigadas':
+                datos.id_conglomerado = document.getElementById('edit-conglomerado_id')?.value;
                 datos.nombre_lider = document.getElementById('edit-nombre_lider')?.value;
-                datos.integrantes = document.getElementById('edit-integrantes')?.value;
+                const integrantes = document.getElementById('edit-integrantes')?.value;
+                if (integrantes) {
+                    datos.integrantes = integrantes.split(',').map(s => s.trim()).filter(s => s);
+                }
                 datos.region = document.getElementById('edit-region')?.value;
+                datos.fecha_inicio = document.getElementById('edit-fecha_inicio')?.value || null;
+                datos.fecha_fin = document.getElementById('edit-fecha_fin')?.value || null;
                 break;
             case 'muestras':
+                datos.id_brigada = document.getElementById('edit-brigada_id')?.value;
+                datos.codigo = document.getElementById('edit-codigo')?.value;
+                datos.estado_clasificacion = document.getElementById('edit-estado')?.value;
                 datos.nombre_comun = document.getElementById('edit-nombre_comun')?.value;
-                datos.nombre_cientifico = document.getElementById('edit-nombre_cientifico')?.value;
-                datos.familia = document.getElementById('edit-familia')?.value;
                 datos.tipo_arbol = document.getElementById('edit-tipo_arbol')?.value;
                 datos.uso = document.getElementById('edit-uso')?.value;
+                datos.familia = document.getElementById('edit-familia')?.value || null;
+                datos.nombre_cientifico = document.getElementById('edit-nombre_cientifico')?.value || null;
                 break;
             case 'conteos':
+                datos.id_brigada = document.getElementById('edit-brigada_id')?.value;
                 datos.subparcela = parseInt(document.getElementById('edit-subparcela')?.value);
                 datos.brinzales = parseInt(document.getElementById('edit-brinzales')?.value) || 0;
                 datos.latizales = parseInt(document.getElementById('edit-latizales')?.value) || 0;
                 datos.fustales = parseInt(document.getElementById('edit-fustales')?.value) || 0;
                 break;
             case 'inspecciones':
+                datos.id_conglomerado = document.getElementById('edit-conglomerado_id')?.value;
+                datos.id_brigada = document.getElementById('edit-brigada_id')?.value;
                 datos.fecha = document.getElementById('edit-fecha')?.value;
                 datos.clima = document.getElementById('edit-clima')?.value;
                 datos.duracion_horas = parseInt(document.getElementById('edit-duracion_horas')?.value);
-                datos.observaciones = document.getElementById('edit-observaciones')?.value;
+                datos.observaciones = document.getElementById('edit-observaciones')?.value || null;
                 break;
             case 'admins':
                 datos.email = document.getElementById('edit-email')?.value;
@@ -1487,7 +1756,7 @@ const Admin = {
     },
 
     async eliminar(id) {
-        if (!confirm('¿Estás seguro de que deseas eliminar este registro? Esta acción no se puede deshacer.')) {
+        if (!await UI.confirmModal('Eliminar Registro', '¿Estás seguro de que deseas eliminar este registro? Esta acción no se puede deshacer.', 'danger')) {
             return;
         }
 

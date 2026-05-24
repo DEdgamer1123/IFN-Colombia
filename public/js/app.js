@@ -281,7 +281,7 @@ function configurarExportacion() {
 
 function configurarDatosEjemplo() {
     document.getElementById('btn-datos-ejemplo')?.addEventListener('click', async () => {
-        if (!confirm('¿Desea cargar los datos de ejemplo? Esto agregará registros de demostración.')) {
+        if (!await UI.confirmModal('Cargar Datos de Ejemplo', '¿Desea cargar los datos de ejemplo? Esto agregará registros de demostración.', 'warning')) {
             return;
         }
 
